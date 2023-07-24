@@ -48,7 +48,7 @@ impl<T> TestCaseBuilder<'static, T>
 }
 
 impl Runner {
-    
+   
     pub fn run<T>(&self, mut test_case: TestCase<T>)
         where T: TestContext + 'static + Sync + Debug {
 
@@ -89,17 +89,9 @@ impl Runner {
                     continue;
                 }
 
-                let step_status = StepStatus::new(
-                    inner_ctx.get_session_id(),
-                    test_case.test_name.to_owned(),
-                    inner_ctx.get_current_step_name(), 
-                    inner_ctx.get_current_duration(), 
-                    inner_ctx.get_successful_hits(), 
-                    inner_ctx.get_unsuccessful_hits(),
-                    inner_ctx.get_current_min_time(),
-                    inner_ctx.get_current_max_time(),
-                    inner_ctx.get_current_mean_time()
-                );
+                let step_status = Self::create_step_status(
+                    test_case.test_name.to_owned(), 
+                    Box::new(inner_ctx));
 
                 report_step_status(true, step_status, action_sinks);
                 thread::sleep(Duration::from_millis(50));
@@ -115,17 +107,9 @@ impl Runner {
                     continue;
                 }
 
-                let step_status = StepStatus::new(
-                    inner_ctx.get_session_id(),
-                    test_case.test_name.to_owned(),
-                    inner_ctx.get_current_step_name(), 
-                    inner_ctx.get_current_duration(), 
-                    inner_ctx.get_successful_hits(), 
-                    inner_ctx.get_unsuccessful_hits(),
-                    inner_ctx.get_current_min_time(),
-                    inner_ctx.get_current_max_time(),
-                    inner_ctx.get_current_mean_time()
-                );
+                let step_status = Self::create_step_status(
+                    test_case.test_name.to_owned(), 
+                    Box::new(inner_ctx));
 
                 report_step_status(false, step_status, step_sinks);
                 thread::sleep(Duration::from_millis(50));
@@ -148,16 +132,9 @@ impl Runner {
         if !self.reporting_sinks.is_empty() {
             let ctx = test_case.test_context.unwrap();
 
-            let test_status = TestStatus::new(
-                ctx.get_session_id(),
+            let test_status = Self::create_test_status(
                 test_case.test_name.to_owned(), 
-                ctx.get_current_duration(), 
-                ctx.get_successful_hits(), 
-                ctx.get_unsuccessful_hits(),
-                ctx.get_current_min_time(),
-                ctx.get_current_max_time(),
-                ctx.get_current_mean_time()
-            );
+                Box::new(ctx));
 
             let arc_test_status = Arc::new(Mutex::new(test_status));
             let mut sink_handles = Vec::default();
@@ -186,7 +163,34 @@ impl Runner {
         self.with_reporting_sink(sink);
     }
 
-    fn with_reporting_sink<T: ReportingSink + 'static>(&mut self, sink: T) {
+    pub fn with_reporting_sink<T: ReportingSink + 'static>(&mut self, sink: T) {
         self.reporting_sinks.push(Arc::new(Box::new(sink)));
+    }
+
+    fn create_step_status<T>(test_name: String, test_context: Box<T>) -> StepStatus
+        where T: TestContext  {
+            StepStatus::new(
+                test_context.get_session_id(),
+                test_name,
+                test_context.get_current_step_name(), 
+                test_context.get_current_duration(), 
+                test_context.get_successful_hits(), 
+                test_context.get_unsuccessful_hits(),
+                test_context.get_current_min_time(),
+                test_context.get_current_max_time(),
+                test_context.get_current_mean_time())
+    }
+
+    fn create_test_status<T>(test_name: String, test_context: Box<T>) -> TestStatus
+        where T: TestContext  { 
+            TestStatus::new(
+                test_context.get_session_id(),
+                test_name, 
+                test_context.get_current_duration(), 
+                test_context.get_successful_hits(), 
+                test_context.get_unsuccessful_hits(),
+                test_context.get_current_min_time(),
+                test_context.get_current_max_time(),
+                test_context.get_current_mean_time())
     }
 }
