@@ -10,15 +10,28 @@ pub mod reporting;
 
 pub trait TestContext : Default + Clone + Copy + Send {
     fn new(test_name: &'static str, test_suite: &'static str) -> Self;
-    fn add_hit(&mut self, result: bool);
+    fn add_hit(&mut self, result: bool, duration: Duration);
     fn get_hits(&self) -> u64;
     fn get_successful_hits(&self) -> u64;
     fn get_unsuccessful_hits(&self) -> u64;
     fn get_session_id(&self) -> String;
-    fn get_current_duration(&self) -> Option<Duration>;
+    fn get_current_duration(&self) -> Duration;
     fn get_current_step_name(&self) -> String;
+    fn get_current_mean_time(&self) -> Duration;
+    fn get_current_min_time(&self) -> Duration;
+    fn get_current_max_time(&self) -> Duration;
     fn set_current_step(&mut self, step_name: &'static str, stage_name: &'static str);
-    fn set_current_duration(&mut self, duration: Duration);
+    fn set_current_duration(&mut self, duration: Duration);    
+}
+
+#[derive(Default,Clone,Copy,Debug)]
+struct TestCaseMetrics {
+    successful_hits: u64,
+    unsuccessful_hits: u64,
+    test_duration: Duration,
+    mean_time: Duration,
+    max_time: Duration,
+    min_time: Duration
 }
 
 #[derive(Default,Clone,Copy,Debug)]
@@ -28,10 +41,8 @@ pub struct TestCaseContext<'a, T> {
     pub test_suite: &'a str,
     pub test_step_name: Option<&'a str>,
     pub test_stage_name: Option<&'a str>,
-    pub successful_hits: u64,
-    pub unsuccessful_hits: u64,
-    pub duration: Option<Duration>,
-    pub data: T
+    pub data: T,
+    test_metrics: TestCaseMetrics
 }
 
 pub struct TestCase<T: TestContext> {
@@ -64,23 +75,35 @@ impl<'a, T> TestContext for TestCaseContext<'a, T>
             test_suite,
             test_step_name: None,
             test_stage_name: None,
-            successful_hits: 0,
-            unsuccessful_hits: 0,
-            duration: None,
+            test_metrics: TestCaseMetrics::default(),
             data: T::default()
         }
     }
 
     fn get_hits(&self) -> u64 {
-        self.successful_hits + self.unsuccessful_hits
+        self.test_metrics.successful_hits + self.test_metrics.unsuccessful_hits
     }
 
-    fn add_hit(&mut self, result: bool) {
+    fn add_hit(&mut self, result: bool, duration: Duration) {
         if result {
-            self.successful_hits += 1;
+            self.test_metrics.successful_hits += 1;
         } else {
-            self.unsuccessful_hits +=1;
+            self.test_metrics.unsuccessful_hits +=1;
         }
+
+        if self.test_metrics.min_time == Duration::from_millis(0) || self.test_metrics.min_time > duration {
+            self.test_metrics.min_time = duration;
+        }
+        if self.test_metrics.max_time < duration {
+            self.test_metrics.max_time = duration;
+        }
+
+        let count = match self.test_metrics.successful_hits + self.test_metrics.unsuccessful_hits {
+            1.. => 2,
+            _ => 1
+        };
+
+        self.test_metrics.mean_time = (self.test_metrics.mean_time + duration) / count;
     }
 
     fn get_session_id(&self) -> String {
@@ -93,23 +116,35 @@ impl<'a, T> TestContext for TestCaseContext<'a, T>
     }
 
     fn set_current_duration(&mut self, duration: Duration) {
-        self.duration = Some(duration);
+        self.test_metrics.test_duration = duration;
     }
 
     fn get_successful_hits(&self) -> u64 {
-        self.successful_hits
+        self.test_metrics.successful_hits
     }
 
     fn get_unsuccessful_hits(&self) -> u64 {
-        self.unsuccessful_hits
+        self.test_metrics.unsuccessful_hits
     }
 
-    fn get_current_duration(&self) -> Option<Duration> {
-        self.duration
+    fn get_current_duration(&self) -> Duration {
+        self.test_metrics.test_duration
     }
 
     fn get_current_step_name(&self) -> String {
         self.test_step_name.unwrap().to_string()
+    }
+
+    fn get_current_mean_time(&self) -> Duration {
+        self.test_metrics.mean_time
+    }
+
+    fn get_current_max_time(&self) -> Duration {
+        self.test_metrics.max_time
+    }
+
+    fn get_current_min_time(&self) -> Duration {
+        self.test_metrics.min_time
     }
 }
 
@@ -153,10 +188,11 @@ impl<T> TestCase<T>
                         let t_ctx = Arc::clone(&ctx);
                         let action = test_step.action.clone();
             
-                        let handle = thread::spawn(move || {                                 
+                        let handle = thread::spawn(move || {            
+                            let action_start_time = SystemTime::now();                     
                             let action_result = action(&t_ctx);
                             let mut inner_ctx = t_ctx.lock().unwrap();
-                            inner_ctx.add_hit(action_result);
+                            inner_ctx.add_hit(action_result, action_start_time.elapsed().unwrap());
                             inner_ctx.set_current_duration(start_time.elapsed().unwrap());
                             action_transmitter.send(*inner_ctx).unwrap();
                             drop(inner_ctx);

@@ -1,8 +1,11 @@
 use std::time::{Duration};
 
 #[derive(Clone, Debug)]
-pub struct Status {
-    pub duration: Duration,
+pub struct Metrics {
+    pub test_duration: Duration,
+    pub mean_time: Duration,
+    pub max_time: Duration,
+    pub min_time: Duration,
     pub positive_hits: u64,
     pub negative_hits: u64,
     pub all_hits: u64
@@ -13,14 +16,14 @@ pub struct StepStatus {
     pub session_id: String,
     pub test_name: String,
     pub step_name: String, 
-    pub status: Status
+    pub status: Metrics
 }
 
 #[derive(Clone, Debug)]
 pub struct TestStatus {
     pub session_id: String,
     pub test_name: String,
-    pub status: Status
+    pub status: Metrics
 }
 
 #[derive(Default, Clone)]
@@ -47,32 +50,50 @@ impl ReportingSink for DefaultReportingSink {
 }
 
 impl TestStatus  {
-    pub fn new(session_id: String, test_name: String, duration: Duration, positive_hits: u64, negative_hits: u64) -> Self {
+    pub fn new(session_id: String, test_name: String, test_duration: Duration, positive_hits: u64, negative_hits: u64, min_time: Duration, max_time: Duration, mean_time: Duration) -> Self {
         TestStatus {
             session_id: session_id,
             test_name: test_name,
-            status: Status {
-                duration,
+            status: Metrics::new(
+                test_duration,
                 positive_hits,
                 negative_hits,
-                all_hits: positive_hits + negative_hits
-            }
+                min_time, 
+                max_time,
+                mean_time
+            )
         }
     }
 }
 
 impl StepStatus  {
-    pub fn new(session_id: String, test_name: String, step_name: String, duration: Duration, positive_hits: u64, negative_hits: u64) -> Self {
+    pub fn new(session_id: String, test_name: String, step_name: String, test_duration: Duration, positive_hits: u64, negative_hits: u64, min_time: Duration, max_time: Duration, mean_time: Duration) -> Self {
         StepStatus {
             session_id: session_id,
             test_name: test_name,
             step_name: step_name,
-            status: Status {
-                duration,
+            status: Metrics::new(
+                test_duration,
                 positive_hits,
                 negative_hits,
-                all_hits: positive_hits + negative_hits
-            }
+                min_time, 
+                max_time,
+                mean_time
+            )
+        }
+    }
+}
+
+impl Metrics {
+    fn new(test_duration: Duration, positive_hits: u64, negative_hits: u64, min_time: Duration, max_time: Duration, mean_time: Duration) -> Self {
+        Metrics {
+            test_duration,
+            positive_hits,
+            negative_hits,
+            min_time,
+            max_time,
+            mean_time,
+            all_hits: positive_hits + negative_hits
         }
     }
 }

@@ -93,9 +93,13 @@ impl Runner {
                     inner_ctx.get_session_id(),
                     test_case.test_name.to_owned(),
                     inner_ctx.get_current_step_name(), 
-                    inner_ctx.get_current_duration().unwrap(), 
+                    inner_ctx.get_current_duration(), 
                     inner_ctx.get_successful_hits(), 
-                    inner_ctx.get_unsuccessful_hits());
+                    inner_ctx.get_unsuccessful_hits(),
+                    inner_ctx.get_current_min_time(),
+                    inner_ctx.get_current_max_time(),
+                    inner_ctx.get_current_mean_time()
+                );
 
                 report_step_status(true, step_status, action_sinks);
                 thread::sleep(Duration::from_millis(50));
@@ -115,9 +119,13 @@ impl Runner {
                     inner_ctx.get_session_id(),
                     test_case.test_name.to_owned(),
                     inner_ctx.get_current_step_name(), 
-                    inner_ctx.get_current_duration().unwrap(), 
+                    inner_ctx.get_current_duration(), 
                     inner_ctx.get_successful_hits(), 
-                    inner_ctx.get_unsuccessful_hits());
+                    inner_ctx.get_unsuccessful_hits(),
+                    inner_ctx.get_current_min_time(),
+                    inner_ctx.get_current_max_time(),
+                    inner_ctx.get_current_mean_time()
+                );
 
                 report_step_status(false, step_status, step_sinks);
                 thread::sleep(Duration::from_millis(50));
@@ -143,9 +151,13 @@ impl Runner {
             let test_status = TestStatus::new(
                 ctx.get_session_id(),
                 test_case.test_name.to_owned(), 
-                ctx.get_current_duration().unwrap(), 
+                ctx.get_current_duration(), 
                 ctx.get_successful_hits(), 
-                ctx.get_unsuccessful_hits());
+                ctx.get_unsuccessful_hits(),
+                ctx.get_current_min_time(),
+                ctx.get_current_max_time(),
+                ctx.get_current_mean_time()
+            );
 
             let arc_test_status = Arc::new(Mutex::new(test_status));
             let mut sink_handles = Vec::default();
