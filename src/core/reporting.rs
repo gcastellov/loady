@@ -1,4 +1,5 @@
 use std::time::{Duration};
+use std::fmt::{Formatter,Result,Display};
 
 #[derive(Clone, Debug)]
 pub struct Metrics {
@@ -95,5 +96,46 @@ impl Metrics {
             mean_time,
             all_hits: positive_hits + negative_hits
         }
+    }
+}
+
+impl Display for TestStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{: <20}: {}\r\n{: <20}: {}\r\n\r\n{}", 
+            "Session ID",
+            self.session_id, 
+            "Test Case",
+            self.test_name,
+            self.status)
+    }
+}
+
+impl Display for StepStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{: <20}: {}\r\n\r\n{}", 
+            "Test Step",
+            self.step_name,
+            self.status)
+    }
+}
+
+impl Display for Metrics {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{: <20}: {:?}\r\n{: <20}: {:?}\r\n{: <20}: {:?}\r\n{: <20}: {:?}\r\n\r\n{: <20}: {:?}\r\n{: <20}: {:?}\r\n{: <20}: {:?}", 
+            "Test Duration",
+            self.test_duration,
+            "Min Time",
+            self.min_time,
+            "Mean Time", 
+            self.mean_time,
+            "Max Time",
+            self.max_time,
+            "All Hits",
+            self.all_hits,
+            "Successful hits",
+            self.positive_hits,
+            "Unsuccessul hits",
+            self.negative_hits
+        )
     }
 }
