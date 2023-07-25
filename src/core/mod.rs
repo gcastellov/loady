@@ -7,6 +7,7 @@ use std::marker::Sync;
 use uuid::Uuid;
 
 pub mod reporting;
+pub mod runner;
 
 pub trait TestContext : Default + Clone + Copy + Send {
     fn new(test_name: &'static str, test_suite: &'static str) -> Self;

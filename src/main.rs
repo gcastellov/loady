@@ -1,5 +1,6 @@
-use loady::{Runner,TestCaseBuilder};
+use loady::{TestCaseBuilder};
 use loady::core::{TestCaseContext};
+use loady::core::runner::{TestRunner};
 use std::sync::{Mutex,Arc};
 use std::time::{Duration};
 
@@ -25,8 +26,9 @@ fn main() {
             .with_stage(&"load", Duration::from_secs(10), Duration::from_secs(1), 10)
         .build();
 
-    let mut runner = Runner::default();
+    let mut runner = TestRunner::default();
     runner.with_default_reporting_sink();
     runner.with_default_output_file();
-    runner.run(test_case);
+    
+    let _ = runner.run(test_case);
 }
