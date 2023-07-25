@@ -60,7 +60,7 @@ impl TestRunner {
                     continue;
                 }
 
-                let step_status = Self::create_step_status(
+                let step_status = StepStatus::new(
                     test_case.test_name.to_owned(), 
                     Box::new(inner_ctx));
 
@@ -77,7 +77,7 @@ impl TestRunner {
                     continue;
                 }
 
-                let step_status = Self::create_step_status(
+                let step_status = StepStatus::new(
                     test_case.test_name.to_owned(), 
                     Box::new(inner_ctx));
 
@@ -119,13 +119,13 @@ impl TestRunner {
         self.output_dir = Some(String::from("output"));
         self.output_file = Some(String::from(Self::SESSION_ID_PATTERN.to_owned() + ".txt"));
     }
-
+   
     fn report_test_status<T>(&self, test_case: &TestCase<T>, stats_by_step: &Vec<StepStatus>) -> Result<(), Error>
         where T: TestContext + 'static + Sync + Debug {
 
         let ctx = test_case.test_context.unwrap();
 
-        let test_status = Self::create_test_status(
+        let test_status = TestStatus::new(
             test_case.test_name.to_owned(), 
             Box::new(ctx));
 
@@ -181,32 +181,5 @@ impl TestRunner {
         }
 
         Ok(())
-    }
-
-    fn create_step_status<T>(test_name: String, test_context: Box<T>) -> StepStatus
-        where T: TestContext  {
-            StepStatus::new(
-                test_context.get_session_id(),
-                test_name,
-                test_context.get_current_step_name(), 
-                test_context.get_current_duration(), 
-                test_context.get_successful_hits(), 
-                test_context.get_unsuccessful_hits(),
-                test_context.get_current_min_time(),
-                test_context.get_current_max_time(),
-                test_context.get_current_mean_time())
-    }
-
-    fn create_test_status<T>(test_name: String, test_context: Box<T>) -> TestStatus
-        where T: TestContext  { 
-            TestStatus::new(
-                test_context.get_session_id(),
-                test_name, 
-                test_context.get_current_duration(), 
-                test_context.get_successful_hits(), 
-                test_context.get_unsuccessful_hits(),
-                test_context.get_current_min_time(),
-                test_context.get_current_max_time(),
-                test_context.get_current_mean_time())
     }
 }

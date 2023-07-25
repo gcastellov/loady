@@ -1,6 +1,7 @@
 use std::time::{Duration};
 use std::fmt::{Formatter,Result,Display};
 use num_format::{Locale, ToFormattedString};
+use crate::core::{TestContext};
 
 #[derive(Clone, Debug)]
 pub struct Metrics {
@@ -52,50 +53,36 @@ impl ReportingSink for DefaultReportingSink {
 }
 
 impl TestStatus  {
-    pub fn new(session_id: String, test_name: String, test_duration: Duration, positive_hits: u128, negative_hits: u128, min_time: Duration, max_time: Duration, mean_time: Duration) -> Self {
+    pub fn new(test_name: String, test_context: Box<impl TestContext>) -> Self {
         TestStatus {
-            session_id: session_id,
             test_name: test_name,
-            metrics: Metrics::new(
-                test_duration,
-                positive_hits,
-                negative_hits,
-                min_time, 
-                max_time,
-                mean_time
-            )
+            session_id: test_context.get_session_id(),
+            metrics: Metrics::new(test_context)
         }
     }
 }
 
 impl StepStatus  {
-    pub fn new(session_id: String, test_name: String, step_name: String, test_duration: Duration, positive_hits: u128, negative_hits: u128, min_time: Duration, max_time: Duration, mean_time: Duration) -> Self {
+    pub fn new(test_name: String, test_context: Box<impl TestContext>) -> Self {
         StepStatus {
-            session_id: session_id,
             test_name: test_name,
-            step_name: step_name,
-            metrics: Metrics::new(
-                test_duration,
-                positive_hits,
-                negative_hits,
-                min_time, 
-                max_time,
-                mean_time
-            )
+            session_id: test_context.get_session_id(),
+            step_name: test_context.get_current_step_name(),
+            metrics: Metrics::new(test_context)
         }
     }
 }
 
 impl Metrics {
-    fn new(test_duration: Duration, positive_hits: u128, negative_hits: u128, min_time: Duration, max_time: Duration, mean_time: Duration) -> Self {
+    fn new(test_context: Box<impl TestContext>) -> Self {
         Metrics {
-            test_duration,
-            positive_hits,
-            negative_hits,
-            min_time,
-            max_time,
-            mean_time,
-            all_hits: positive_hits + negative_hits
+            test_duration: test_context.get_current_duration(),
+            positive_hits: test_context.get_successful_hits(),
+            negative_hits: test_context.get_unsuccessful_hits(),
+            min_time: test_context.get_current_min_time(), 
+            max_time: test_context.get_current_max_time(),
+            mean_time: test_context.get_current_mean_time(),
+            all_hits: test_context.get_successful_hits() + test_context.get_unsuccessful_hits()
         }
     }
 }
