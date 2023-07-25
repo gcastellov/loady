@@ -1,5 +1,6 @@
 use std::time::{Duration};
 use std::fmt::{Formatter,Result,Display};
+use num_format::{Locale, ToFormattedString};
 
 #[derive(Clone, Debug)]
 pub struct Metrics {
@@ -7,9 +8,9 @@ pub struct Metrics {
     pub mean_time: Duration,
     pub max_time: Duration,
     pub min_time: Duration,
-    pub positive_hits: u64,
-    pub negative_hits: u64,
-    pub all_hits: u64
+    pub positive_hits: u128,
+    pub negative_hits: u128,
+    pub all_hits: u128
 }
 
 #[derive(Clone, Debug)]
@@ -51,7 +52,7 @@ impl ReportingSink for DefaultReportingSink {
 }
 
 impl TestStatus  {
-    pub fn new(session_id: String, test_name: String, test_duration: Duration, positive_hits: u64, negative_hits: u64, min_time: Duration, max_time: Duration, mean_time: Duration) -> Self {
+    pub fn new(session_id: String, test_name: String, test_duration: Duration, positive_hits: u128, negative_hits: u128, min_time: Duration, max_time: Duration, mean_time: Duration) -> Self {
         TestStatus {
             session_id: session_id,
             test_name: test_name,
@@ -68,7 +69,7 @@ impl TestStatus  {
 }
 
 impl StepStatus  {
-    pub fn new(session_id: String, test_name: String, step_name: String, test_duration: Duration, positive_hits: u64, negative_hits: u64, min_time: Duration, max_time: Duration, mean_time: Duration) -> Self {
+    pub fn new(session_id: String, test_name: String, step_name: String, test_duration: Duration, positive_hits: u128, negative_hits: u128, min_time: Duration, max_time: Duration, mean_time: Duration) -> Self {
         StepStatus {
             session_id: session_id,
             test_name: test_name,
@@ -86,7 +87,7 @@ impl StepStatus  {
 }
 
 impl Metrics {
-    fn new(test_duration: Duration, positive_hits: u64, negative_hits: u64, min_time: Duration, max_time: Duration, mean_time: Duration) -> Self {
+    fn new(test_duration: Duration, positive_hits: u128, negative_hits: u128, min_time: Duration, max_time: Duration, mean_time: Duration) -> Self {
         Metrics {
             test_duration,
             positive_hits,
@@ -121,21 +122,31 @@ impl Display for StepStatus {
 
 impl Display for Metrics {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{: <20}: {:?}\r\n{: <20}: {:?}\r\n{: <20}: {:?}\r\n{: <20}: {:?}\r\n\r\n{: <20}: {:?}\r\n{: <20}: {:?}\r\n{: <20}: {:?}", 
+
+
+        let format_number = |num: &u128| -> String {
+            num.to_formatted_string(&Locale::en)
+        };
+
+        let format_duration = |duration: &Duration| -> String {
+            format_number(&duration.as_millis())
+        };
+
+        write!(f, "{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n\r\n{: <20}: {}\r\n{: <20}: {}\r\n{: <20}: {}", 
             "Test Duration",
-            self.test_duration,
+            format_duration(&self.test_duration),
             "Min Time",
-            self.min_time,
+            format_duration(&self.min_time),
             "Mean Time", 
-            self.mean_time,
+            format_duration(&self.mean_time),
             "Max Time",
-            self.max_time,
+            format_duration(&self.max_time),
             "All Hits",
-            self.all_hits,
+            format_number(&self.all_hits),
             "Successful hits",
-            self.positive_hits,
+            format_number(&self.positive_hits),
             "Unsuccessul hits",
-            self.negative_hits
+            format_number(&self.negative_hits)
         )
     }
 }

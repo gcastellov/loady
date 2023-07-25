@@ -12,9 +12,9 @@ pub mod runner;
 pub trait TestContext : Default + Clone + Copy + Send {
     fn new(test_name: &'static str, test_suite: &'static str) -> Self;
     fn add_hit(&mut self, result: bool, duration: Duration);
-    fn get_hits(&self) -> u64;
-    fn get_successful_hits(&self) -> u64;
-    fn get_unsuccessful_hits(&self) -> u64;
+    fn get_hits(&self) -> u128;
+    fn get_successful_hits(&self) -> u128;
+    fn get_unsuccessful_hits(&self) -> u128;
     fn get_session_id(&self) -> String;
     fn get_current_duration(&self) -> Duration;
     fn get_current_step_name(&self) -> String;
@@ -27,8 +27,8 @@ pub trait TestContext : Default + Clone + Copy + Send {
 
 #[derive(Default,Clone,Copy,Debug)]
 struct TestCaseMetrics {
-    successful_hits: u64,
-    unsuccessful_hits: u64,
+    successful_hits: u128,
+    unsuccessful_hits: u128,
     test_duration: Duration,
     mean_time: Duration,
     max_time: Duration,
@@ -81,7 +81,7 @@ impl<'a, T> TestContext for TestCaseContext<'a, T>
         }
     }
 
-    fn get_hits(&self) -> u64 {
+    fn get_hits(&self) -> u128 {
         self.test_metrics.successful_hits + self.test_metrics.unsuccessful_hits
     }
 
@@ -120,11 +120,11 @@ impl<'a, T> TestContext for TestCaseContext<'a, T>
         self.test_metrics.test_duration = duration;
     }
 
-    fn get_successful_hits(&self) -> u64 {
+    fn get_successful_hits(&self) -> u128 {
         self.test_metrics.successful_hits
     }
 
-    fn get_unsuccessful_hits(&self) -> u64 {
+    fn get_unsuccessful_hits(&self) -> u128 {
         self.test_metrics.unsuccessful_hits
     }
 

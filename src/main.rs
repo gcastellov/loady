@@ -3,6 +3,7 @@ use loady::core::{TestCaseContext};
 use loady::core::runner::{TestRunner};
 use std::sync::{Mutex,Arc};
 use std::time::{Duration};
+use std::thread;
 
 #[derive(Default,Clone,Copy,Debug)]
 struct InnerContext {
@@ -11,10 +12,12 @@ struct InnerContext {
 fn main() {
 
     let positive_callback = |_: &Arc::<Mutex::<TestCaseContext::<InnerContext>>>| -> bool {
+        thread::sleep(Duration::from_millis(50));
         true
     };
 
     let negative_callback = |_: &Arc::<Mutex::<TestCaseContext::<InnerContext>>>| -> bool {
+        thread::sleep(Duration::from_millis(25));
         false
     };
 
