@@ -18,14 +18,14 @@ pub struct StepStatus {
     pub session_id: String,
     pub test_name: String,
     pub step_name: String, 
-    pub status: Metrics
+    pub metrics: Metrics
 }
 
 #[derive(Clone, Debug)]
 pub struct TestStatus {
     pub session_id: String,
     pub test_name: String,
-    pub status: Metrics
+    pub metrics: Metrics
 }
 
 #[derive(Default, Clone)]
@@ -56,7 +56,7 @@ impl TestStatus  {
         TestStatus {
             session_id: session_id,
             test_name: test_name,
-            status: Metrics::new(
+            metrics: Metrics::new(
                 test_duration,
                 positive_hits,
                 negative_hits,
@@ -74,7 +74,7 @@ impl StepStatus  {
             session_id: session_id,
             test_name: test_name,
             step_name: step_name,
-            status: Metrics::new(
+            metrics: Metrics::new(
                 test_duration,
                 positive_hits,
                 negative_hits,
@@ -107,7 +107,7 @@ impl Display for TestStatus {
             self.session_id, 
             "Test Case",
             self.test_name,
-            self.status)
+            self.metrics)
     }
 }
 
@@ -116,7 +116,7 @@ impl Display for StepStatus {
         write!(f, "{: <20}: {}\r\n\r\n{}", 
             "Test Step",
             self.step_name,
-            self.status)
+            self.metrics)
     }
 }
 
