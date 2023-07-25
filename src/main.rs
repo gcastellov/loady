@@ -22,11 +22,11 @@ fn main() {
     };
 
     let test_case = TestCaseBuilder::<InnerContext>
-        ::new(&"simple sample", &"samples")
-        .with_step(&"first", positive_callback)
-            .with_stage(&"warm up", Duration::from_secs(5), Duration::from_secs(1), 1)
-        .with_step(&"second", negative_callback)
-            .with_stage(&"load", Duration::from_secs(10), Duration::from_secs(1), 10)
+        ::new("simple sample", "samples")
+        .with_step("first", positive_callback)
+            .with_stage("warm up", Duration::from_secs(5), Duration::from_secs(1), 1)
+        .with_step("second", negative_callback)
+            .with_stage("load", Duration::from_secs(10), Duration::from_secs(1), 10)
         .build();
 
     let mut runner = TestRunner::default();
