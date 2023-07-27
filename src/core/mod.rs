@@ -6,7 +6,9 @@ use std::fmt::Debug;
 use std::marker::Sync;
 use uuid::Uuid;
 
+pub mod stats;
 pub mod reporting;
+pub mod exporting;
 pub mod runner;
 
 pub trait TestContext : Default + Clone + Copy + Send {

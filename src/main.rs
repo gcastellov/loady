@@ -31,7 +31,7 @@ fn main() {
 
     let mut runner = TestRunner::default();
     runner.with_default_reporting_sink();
-    runner.with_default_output_file();
+    runner.with_default_output_files();
     
     let _ = runner.run(test_case);
 }

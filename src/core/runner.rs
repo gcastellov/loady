@@ -3,22 +3,20 @@ use std::thread;
 use std::time::{Duration};
 use std::fmt::Debug;
 use std::marker::Sync;
-use std::fs::File;
-use std::io::{Write,Error};
-use crate::core::reporting::{ReportingSink,DefaultReportingSink,TestStatus,StepStatus};
+use std::io::{Error};
+use crate::core::reporting::{ReportingSink,DefaultReportingSink};
+use crate::core::exporting::{Exporter};
+use crate::core::stats::{TestStatus,StepStatus};
 use crate::core::{TestCase,TestContext};
 
 #[derive(Default)]
 pub struct TestRunner {
     reporting_sinks: Vec<Arc<Box<dyn ReportingSink>>>,
-    output_dir: Option<String>,
-    output_file: Option<String>
+    exporter: Exporter
 }
 
 impl TestRunner {
-
-    const SESSION_ID_PATTERN: &str = "{session-id}";
-   
+  
     pub fn run<T>(&self, mut test_case: TestCase<T>) -> Result<(), Error>
         where T: TestContext + 'static + Sync + Debug {
 
@@ -115,9 +113,8 @@ impl TestRunner {
         self.reporting_sinks.push(Arc::new(Box::new(sink)));
     }
 
-    pub fn with_default_output_file(&mut self) {
-        self.output_dir = Some(String::from("output"));
-        self.output_file = Some(String::from(Self::SESSION_ID_PATTERN.to_owned() + ".txt"));
+    pub fn with_default_output_files(&mut self) {
+        self.exporter.with_default_output_files();
     }
    
     fn report_test_status<T>(&self, test_case: &TestCase<T>, stats_by_step: &Vec<StepStatus>) -> Result<(), Error>
@@ -130,7 +127,7 @@ impl TestRunner {
             Box::new(ctx));
 
         self.write_to_sinks(test_status.to_owned())?;
-        self.write_output_file(test_status.to_owned(), stats_by_step.to_owned())?;        
+        self.exporter.write_output_files(test_status.to_owned(), stats_by_step.to_owned())?;        
 
         Ok(())
     }
@@ -158,26 +155,6 @@ impl TestRunner {
             for handle in sink_handles {
                 handle.join().unwrap();
             }
-        }
-
-        Ok(())
-    }
-
-    fn write_output_file(&self, test_status: TestStatus, step_status: Vec<StepStatus>) -> Result<(), Error> {
-
-        const STEP_SEPARATOR: &str = "\r\n\r\n----------------------------------------------------------------------\r\n\r\n";
-
-        if let Some(mut file_name) = self.output_file.clone() {            
-            let directory = self.output_dir.clone().unwrap();
-            std::fs::create_dir_all(directory.to_owned())?;           
-            file_name = file_name.as_str().replace(Self::SESSION_ID_PATTERN, test_status.session_id.as_str());
-            file_name = format!("{}/{}", directory, file_name);
-            let mut file = File::create(file_name)?;
-            let content: String = step_status
-                .iter()
-                .fold(format!("{}", test_status), |cur, nxt| cur + format!("{}{}", STEP_SEPARATOR, nxt).as_str());
-
-            file.write_all(content.as_bytes())?;           
         }
 
         Ok(())
