@@ -136,6 +136,15 @@ impl Display for FileContent {
 
 impl FileType {
     
+    pub fn get_content(&self, test_status: TestStatus, step_status: Vec<StepStatus>) -> String {
+        let content = match self {            
+            Self::Csv => FileContent::Csv(test_status, step_status),
+            Self::Txt => FileContent::Txt(test_status, step_status)
+        };
+
+        format!("{}", content)
+    }
+
     fn format_file_name(&self, file_name: &String) -> String {
         let extension = match self {
             Self::Csv => "csv",
@@ -147,15 +156,6 @@ impl FileType {
         } else { 
             format!("{}.{}", file_name, extension) 
         }
-    }
-
-    fn get_content(&self, test_status: TestStatus, step_status: Vec<StepStatus>) -> String {
-        let content = match self {            
-            Self::Csv => FileContent::Csv(test_status, step_status),
-            Self::Txt => FileContent::Txt(test_status, step_status)
-        };
-
-        format!("{}", content)
     }
 }
 

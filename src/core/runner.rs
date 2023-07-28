@@ -12,7 +12,8 @@ use crate::core::{TestCase,TestContext};
 #[derive(Default)]
 pub struct TestRunner {
     reporting_sinks: Vec<Arc<Box<dyn ReportingSink>>>,
-    exporter: Exporter
+    exporter: Exporter,
+    use_summary: bool
 }
 
 impl TestRunner {
@@ -120,6 +121,10 @@ impl TestRunner {
     pub fn with_output_file(&mut self, file_type: FileType, directory: &str, file_name: &str) {
         self.exporter.with_output_file(file_type, directory.to_string(), file_name.to_string());
     }
+
+    pub fn with_test_summary_std_out(&mut self) {
+        self.use_summary = true;
+    }
    
     fn report_test_status<T>(&self, test_case: &TestCase<T>, stats_by_step: &Vec<StepStatus>) -> Result<(), Error>
         where T: TestContext + 'static + Sync + Debug {
@@ -131,7 +136,12 @@ impl TestRunner {
             Box::new(ctx));
 
         self.write_to_sinks(test_status.to_owned())?;
-        self.exporter.write_output_files(test_status.to_owned(), stats_by_step.to_owned())?;        
+        self.exporter.write_output_files(test_status.to_owned(), stats_by_step.to_owned())?;
+
+        if self.use_summary {
+            let content = FileType::Txt.get_content(test_status.to_owned(), stats_by_step.to_owned());
+            println!("\r\n{}\r\n", content);
+        }
 
         Ok(())
     }
