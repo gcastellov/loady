@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::marker::Sync;
 use std::io::{Error};
 use crate::core::reporting::{ReportingSink,DefaultReportingSink};
-use crate::core::exporting::{Exporter};
+use crate::core::exporting::{Exporter,FileType};
 use crate::core::stats::{TestStatus,StepStatus};
 use crate::core::{TestCase,TestContext};
 
@@ -115,6 +115,10 @@ impl TestRunner {
 
     pub fn with_default_output_files(&mut self) {
         self.exporter.with_default_output_files();
+    }
+
+    pub fn with_output_file(&mut self, file_type: FileType, directory: &str, file_name: &str) {
+        self.exporter.with_output_file(file_type, directory.to_string(), file_name.to_string());
     }
    
     fn report_test_status<T>(&self, test_case: &TestCase<T>, stats_by_step: &Vec<StepStatus>) -> Result<(), Error>

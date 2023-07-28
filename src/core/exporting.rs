@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{Write};
 use crate::core::stats::{TestStatus,StepStatus,Metrics};
 
-pub enum ExportFileType {
+pub enum FileType {
     Txt,
     Csv
 }
@@ -30,7 +30,7 @@ trait Content {
 }
 
 struct ExportFile {
-    file_type: ExportFileType,
+    file_type: FileType,
     directory: String,
     file_name: String
 }
@@ -134,7 +134,7 @@ impl Display for FileContent {
     }
 }
 
-impl ExportFileType {
+impl FileType {
     
     fn format_file_name(&self, file_name: &String) -> String {
         let extension = match self {
@@ -160,7 +160,7 @@ impl ExportFileType {
 }
 
 impl ExportFile {
-    fn new(file_type: ExportFileType, directory: String, file_name: String) -> Self {
+    fn new(file_type: FileType, directory: String, file_name: String) -> Self {
         ExportFile {
             file_type,
             directory, 
@@ -175,12 +175,16 @@ impl Exporter {
 
     pub fn with_default_output_files(&mut self) {
 
-        let mut add_default = |file_type: ExportFileType| {
-            self.export_files.push(ExportFile::new(file_type, String::from("output"), Self::SESSION_ID_PATTERN.to_string()));
+        let mut add_default = |file_type: FileType| {
+            self.with_output_file(file_type, String::from("output"), Self::SESSION_ID_PATTERN.to_string());
         };
 
-        add_default(ExportFileType::Txt);
-        add_default(ExportFileType::Csv);
+        add_default(FileType::Txt);
+        add_default(FileType::Csv);
+    }
+
+    pub fn with_output_file(&mut self, file_type: FileType, directory: String, file_name: String) {
+        self.export_files.push(ExportFile::new(file_type, directory, file_name));
     }
 
     pub fn write_output_files(&self, test_status: TestStatus, step_status: Vec<StepStatus>) -> std::io::Result<()> {
