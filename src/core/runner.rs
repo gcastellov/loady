@@ -1,6 +1,6 @@
 use std::sync::{mpsc,Mutex,Arc};
 use std::thread;
-use std::time::{Duration};
+use std::time::{Duration,Instant};
 use std::fmt::Debug;
 use std::marker::Sync;
 use std::io::{Error};
@@ -9,14 +9,25 @@ use crate::core::exporting::{Exporter,FileType};
 use crate::core::stats::{TestStatus,StepStatus};
 use crate::core::{TestCase,TestContext};
 
-#[derive(Default)]
 pub struct TestRunner {
     reporting_sinks: Vec<Arc<Box<dyn ReportingSink>>>,
     exporter: Exporter,
-    use_summary: bool
+    use_summary: bool,
+    reporting_frequency: Duration
 }
 
 impl TestRunner {
+
+    const DEFAULT_REPORTING_FREQUENCY: Duration = Duration::from_secs(5);
+
+    pub fn new() -> Self {
+        TestRunner {
+            reporting_sinks: Vec::default(),
+            exporter: Exporter::default(),
+            use_summary: false,
+            reporting_frequency: Self::DEFAULT_REPORTING_FREQUENCY
+        }
+    }
   
     pub fn run<T>(&self, mut test_case: TestCase<T>) -> Result<(), Error>
         where T: TestContext + 'static + Sync + Debug {
@@ -43,49 +54,48 @@ impl TestRunner {
             }
         };
 
-
         let (tx_action, rx_action) = mpsc::channel::<T>();
         let (tx_step, rx_step) = mpsc::channel::<T>();
 
-        let action_sinks: Vec<Arc<Box<dyn ReportingSink>>> = self.reporting_sinks.iter().map(|sink|Arc::clone(&sink)).collect();
-        let step_sinks: Vec<Arc<Box<dyn ReportingSink>>> = self.reporting_sinks.iter().map(|sink|Arc::clone(&sink)).collect();
+        let action_sinks: Vec<Arc<Box<dyn ReportingSink>>> = self.reporting_sinks.clone();
+        let step_sinks: Vec<Arc<Box<dyn ReportingSink>>> = self.reporting_sinks.clone();
         let mut stats_by_step: Arc<Mutex<Vec<StepStatus>>> = Arc::new(Mutex::new(Vec::default()));
         let arc_stats_by_step = Arc::clone(&mut stats_by_step);
+        let reporting_frequency = self.reporting_frequency.to_owned();
         
         let t_action_join = thread::spawn(move || { 
+            let mut frequency_instant = Instant::now();
+            
             while let Ok(inner_ctx) = rx_action.recv() {
                 let action_sinks = action_sinks.clone();
-                if action_sinks.is_empty() {
-                    continue;
-                }
-
                 let step_status = StepStatus::new(
                     test_case.test_name.to_owned(), 
                     Box::new(inner_ctx));
 
-                report_step_status(true, step_status, action_sinks);
+                if !action_sinks.is_empty() && frequency_instant.elapsed() > reporting_frequency {
+                    report_step_status(true, step_status, action_sinks);
+                    frequency_instant = Instant::now();                    
+                }
+                
                 thread::sleep(Duration::from_millis(50));
             }
         });
 
         let t_step_join = thread::spawn(move || { 
-
             while let Ok(inner_ctx) = rx_step.recv() {
                 let step_sinks = step_sinks.clone();
-                if step_sinks.is_empty() {
-                    continue;
-                }
-
                 let step_status = StepStatus::new(
                     test_case.test_name.to_owned(), 
                     Box::new(inner_ctx));
 
-                report_step_status(false, step_status.to_owned(), step_sinks);
+                if !step_sinks.is_empty() {
+                    report_step_status(false, step_status.to_owned(), step_sinks);
+                }
 
                 arc_stats_by_step
                     .lock()
                     .unwrap()
-                    .push(step_status.to_owned());
+                    .push(step_status);
 
                 thread::sleep(Duration::from_millis(50));
             }
@@ -124,6 +134,14 @@ impl TestRunner {
 
     pub fn with_test_summary_std_out(&mut self) {
         self.use_summary = true;
+    }
+
+    pub fn with_reporting_frequency(&mut self, seconds: u64) {
+        if Self::DEFAULT_REPORTING_FREQUENCY.as_secs() > seconds {
+            panic!("Reporting frequency must be greater than the default value {}", Self::DEFAULT_REPORTING_FREQUENCY.as_secs())
+        }
+
+        self.reporting_frequency = Duration::from_secs(seconds);
     }
    
     fn report_test_status<T>(&self, test_case: &TestCase<T>, stats_by_step: &Vec<StepStatus>) -> Result<(), Error>
