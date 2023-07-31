@@ -13,7 +13,7 @@ pub mod runner;
 
 pub trait TestContext : Default + Clone + Copy + Send {
     fn new(test_name: &'static str, test_suite: &'static str) -> Self;
-    fn add_hit(&mut self, result: bool, duration: Duration);
+    fn add_hit<K>(&mut self, result: Result<(), K>, duration: Duration);
     fn get_hits(&self) -> u128;
     fn get_successful_hits(&self) -> u128;
     fn get_unsuccessful_hits(&self) -> u128;
@@ -48,16 +48,16 @@ pub struct TestCaseContext<'a, T> {
     test_metrics: TestCaseMetrics
 }
 
-pub struct TestCase<T: TestContext> {
+pub struct TestCase<T: TestContext, K> {
     pub test_name: &'static str,
     pub test_suite: &'static str,
     pub test_context: Option<T>,
-    pub test_steps: Vec<TestStep<T>>
+    pub test_steps: Vec<TestStep<T, K>>
 }
 
-pub struct TestStep<T> {
+pub struct TestStep<T, K> {
     step_name: &'static str,
-    action: fn(&Arc::<Mutex::<T>>) -> bool,
+    action: fn(&Arc::<Mutex::<T>>) -> Result<(), K>,
     stages: Vec<TestStepStage>
 }
 
@@ -87,8 +87,8 @@ impl<'a, T> TestContext for TestCaseContext<'a, T>
         self.test_metrics.successful_hits + self.test_metrics.unsuccessful_hits
     }
 
-    fn add_hit(&mut self, result: bool, duration: Duration) {
-        if result {
+    fn add_hit<K>(&mut self, result: Result<(), K>, duration: Duration) {
+        if result.is_ok() {
             self.test_metrics.successful_hits += 1;
         } else {
             self.test_metrics.unsuccessful_hits +=1;
@@ -151,11 +151,11 @@ impl<'a, T> TestContext for TestCaseContext<'a, T>
     }
 }
 
-impl<T> TestCase<T> 
-    where T: TestContext + 'static + Sync + Debug {
+impl<'a, T, K> TestCase<T, K> 
+    where T: TestContext + 'static + Sync + Debug, K: 'static {
     
     pub fn new(test_name: &'static str, test_suite: &'static str) -> Self {        
-        TestCase::<T> {
+        TestCase::<T, K> {
             test_name,
             test_suite,
             test_context : None,
@@ -163,7 +163,7 @@ impl<T> TestCase<T>
         }
     }
 
-    pub fn with_step(&mut self, test_step: TestStep<T>) {        
+    pub fn with_step(&mut self, test_step: TestStep<T, K>) {        
         self.test_steps.push(test_step);
     }
 
@@ -198,7 +198,6 @@ impl<T> TestCase<T>
                             inner_ctx.add_hit(action_result, action_start_time.elapsed().unwrap());
                             inner_ctx.set_current_duration(start_time.elapsed().unwrap());
                             action_transmitter.send(*inner_ctx).unwrap();
-                            drop(inner_ctx);
                         });
             
                         handles.push(handle);
@@ -225,8 +224,8 @@ impl<T> TestCase<T>
     }
 }
 
-impl<T: TestContext> TestStep<T> {
-    pub fn new(step_name: &'static str, action: fn(&Arc::<Mutex::<T>>) -> bool) -> Self {
+impl<T: TestContext, K> TestStep<T, K> {
+    pub fn new(step_name: &'static str, action: fn(&Arc::<Mutex::<T>>) -> Result<(), K>) -> Self {
         TestStep {
             step_name,
             action,

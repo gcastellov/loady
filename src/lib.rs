@@ -6,21 +6,21 @@ use crate::core::{TestCase,TestStep,TestCaseContext};
 
 pub mod core;
 
-pub struct TestCaseBuilder<'a, T> 
+pub struct TestCaseBuilder<'a, T, K> 
     where T: 'static + Default + Clone + Copy + Send + Debug + Sync {
-    pub test_case: TestCase<TestCaseContext<'a, T>>
+    pub test_case: TestCase<TestCaseContext<'a, T>, K>
 }
 
-impl<T> TestCaseBuilder<'static, T> 
+impl<T, K: 'static> TestCaseBuilder<'static, T, K> 
     where T: 'static + Default + Clone + Copy + Send + Debug + Sync {
     
     pub fn new(test_name: &'static str, test_suite: &'static str) -> Self {
         TestCaseBuilder {
-            test_case: TestCase::<TestCaseContext<T>>::new(test_name, test_suite)
+            test_case: TestCase::<TestCaseContext<T>, K>::new(test_name, test_suite)
         }
     }
 
-    pub fn with_step(mut self, step_name: &'static str, action: fn(&Arc::<Mutex::<TestCaseContext::<T>>>) -> bool) -> Self {
+    pub fn with_step(mut self, step_name: &'static str, action: fn(&Arc::<Mutex::<TestCaseContext::<T>>>) -> Result<(), K>) -> Self {
         let step = TestStep::new(step_name, action);
         self.test_case.with_step(step);
         self
@@ -35,7 +35,7 @@ impl<T> TestCaseBuilder<'static, T>
         self
     }
 
-    pub fn build(self) -> TestCase::<TestCaseContext::<'static , T>> {
+    pub fn build(self) -> TestCase::<TestCaseContext::<'static , T>, K> {
         self.test_case
     }
 }
