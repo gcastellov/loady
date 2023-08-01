@@ -1,4 +1,5 @@
 use std::time::{Duration};
+use std::collections::HashMap;
 use crate::core::{TestContext};
 
 #[derive(Clone, Debug)]
@@ -9,7 +10,8 @@ pub struct Metrics {
     pub min_time: Duration,
     pub positive_hits: u128,
     pub negative_hits: u128,
-    pub all_hits: u128
+    pub all_hits: u128,
+    pub errors: HashMap<i32, u128>
 }
 
 #[derive(Clone, Debug)]
@@ -57,7 +59,8 @@ impl Metrics {
             min_time: test_context.get_current_min_time(), 
             max_time: test_context.get_current_max_time(),
             mean_time: test_context.get_current_mean_time(),
-            all_hits: test_context.get_successful_hits() + test_context.get_unsuccessful_hits()
+            all_hits: test_context.get_successful_hits() + test_context.get_unsuccessful_hits(),
+            errors: test_context.get_current_errors()
         }
     }
 }

@@ -29,8 +29,8 @@ impl TestRunner {
         }
     }
   
-    pub fn run<'a, T, K>(&self, mut test_case: TestCase<T, K>) -> Result<(), Error>
-        where T: TestContext + 'static + Sync + Debug, K: 'static + Clone {
+    pub fn run<'a, T>(&self, mut test_case: TestCase<T>) -> Result<(), Error>
+        where T: TestContext + 'static + Sync + Debug {
 
         let report_step_status = |is_action: bool, step_status: StepStatus, sinks: Vec<Arc<Box<dyn ReportingSink>>>| {
             let mut sink_handles = Vec::default();
@@ -144,10 +144,10 @@ impl TestRunner {
         self.reporting_frequency = Duration::from_secs(seconds);
     }
    
-    fn report_test_status<T, K>(&self, test_case: &TestCase<T, K>, stats_by_step: &Vec<StepStatus>) -> Result<(), Error>
+    fn report_test_status<T>(&self, test_case: &TestCase<T>, stats_by_step: &Vec<StepStatus>) -> Result<(), Error>
         where T: TestContext + 'static + Sync + Debug {
 
-        let ctx = test_case.test_context.unwrap();
+        let ctx = test_case.test_context.clone().unwrap();
 
         let test_status = TestStatus::new(
             test_case.test_name.to_owned(), 

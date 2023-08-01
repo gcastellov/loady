@@ -5,15 +5,16 @@ use std::sync::mpsc;
 use std::fmt::Debug;
 use std::marker::Sync;
 use uuid::Uuid;
+use std::collections::HashMap;
 
 pub mod stats;
 pub mod reporting;
 pub mod exporting;
 pub mod runner;
 
-pub trait TestContext : Default + Clone + Copy + Send {
+pub trait TestContext : Default + Clone + Send {
     fn new(test_name: &'static str, test_suite: &'static str) -> Self;
-    fn add_hit<K>(&mut self, result: Result<(), K>, duration: Duration);
+    fn add_hit(&mut self, result: Result<(), i32>, duration: Duration);
     fn get_hits(&self) -> u128;
     fn get_successful_hits(&self) -> u128;
     fn get_unsuccessful_hits(&self) -> u128;
@@ -23,21 +24,23 @@ pub trait TestContext : Default + Clone + Copy + Send {
     fn get_current_mean_time(&self) -> Duration;
     fn get_current_min_time(&self) -> Duration;
     fn get_current_max_time(&self) -> Duration;
+    fn get_current_errors(&self) -> HashMap<i32, u128>;
     fn set_current_step(&mut self, step_name: &'static str, stage_name: &'static str);
     fn set_current_duration(&mut self, duration: Duration);    
 }
 
-#[derive(Default,Clone,Copy,Debug)]
+#[derive(Default,Clone,Debug)]
 struct TestCaseMetrics {
     successful_hits: u128,
     unsuccessful_hits: u128,
     test_duration: Duration,
     mean_time: Duration,
     max_time: Duration,
-    min_time: Duration
+    min_time: Duration, 
+    errors: HashMap<i32, u128>
 }
 
-#[derive(Default,Clone,Copy,Debug)]
+#[derive(Default,Clone,Debug)]
 pub struct TestCaseContext<'a, T> {
     pub session_id: Uuid,
     pub test_name: &'a str,
@@ -48,16 +51,16 @@ pub struct TestCaseContext<'a, T> {
     test_metrics: TestCaseMetrics
 }
 
-pub struct TestCase<T: TestContext, K> {
+pub struct TestCase<T: TestContext> {
     pub test_name: &'static str,
     pub test_suite: &'static str,
     pub test_context: Option<T>,
-    pub test_steps: Vec<TestStep<T, K>>
+    pub test_steps: Vec<TestStep<T>>
 }
 
-pub struct TestStep<T, K> {
+pub struct TestStep<T> {
     step_name: &'static str,
-    action: fn(&Arc::<Mutex::<T>>) -> Result<(), K>,
+    action: fn(&Arc::<Mutex::<T>>) -> Result<(), i32>,
     stages: Vec<TestStepStage>
 }
 
@@ -87,13 +90,15 @@ impl<'a, T> TestContext for TestCaseContext<'a, T>
         self.test_metrics.successful_hits + self.test_metrics.unsuccessful_hits
     }
 
-    fn add_hit<K>(&mut self, result: Result<(), K>, duration: Duration) {
-        if result.is_ok() {
-            self.test_metrics.successful_hits += 1;
-        } else {
+    fn add_hit(&mut self, result: Result<(), i32>, duration: Duration) {
+        
+        if let Err(code) = result {
             self.test_metrics.unsuccessful_hits +=1;
+            *self.test_metrics.errors.entry(code).or_insert(0) += 1;
+        } else {
+            self.test_metrics.successful_hits += 1;
         }
-
+        
         if self.test_metrics.min_time == Duration::from_millis(0) || self.test_metrics.min_time > duration {
             self.test_metrics.min_time = duration;
         }
@@ -149,13 +154,17 @@ impl<'a, T> TestContext for TestCaseContext<'a, T>
     fn get_current_min_time(&self) -> Duration {
         self.test_metrics.min_time
     }
+
+    fn get_current_errors(&self) -> HashMap<i32, u128> {
+        self.test_metrics.errors.clone()
+    }
 }
 
-impl<'a, T, K> TestCase<T, K> 
-    where T: TestContext + 'static + Sync + Debug, K: 'static {
+impl<'a, T> TestCase<T> 
+    where T: TestContext + 'static + Sync + Debug {
     
     pub fn new(test_name: &'static str, test_suite: &'static str) -> Self {        
-        TestCase::<T, K> {
+        TestCase::<T> {
             test_name,
             test_suite,
             test_context : None,
@@ -163,7 +172,7 @@ impl<'a, T, K> TestCase<T, K>
         }
     }
 
-    pub fn with_step(&mut self, test_step: TestStep<T, K>) {        
+    pub fn with_step(&mut self, test_step: TestStep<T>) {        
         self.test_steps.push(test_step);
     }
 
@@ -197,7 +206,7 @@ impl<'a, T, K> TestCase<T, K>
                             let mut inner_ctx = t_ctx.lock().unwrap();
                             inner_ctx.add_hit(action_result, action_start_time.elapsed().unwrap());
                             inner_ctx.set_current_duration(start_time.elapsed().unwrap());
-                            action_transmitter.send(*inner_ctx).unwrap();
+                            action_transmitter.send(inner_ctx.to_owned()).unwrap();
                         });
             
                         handles.push(handle);
@@ -211,7 +220,7 @@ impl<'a, T, K> TestCase<T, K>
             step_ctx.set_current_duration(start_time.elapsed().unwrap());
             
             let step_transmitter = mpsc::Sender::clone(tx_step);
-            step_transmitter.send(*step_ctx).unwrap();
+            step_transmitter.send(step_ctx.to_owned()).unwrap();
         }
 
         for handle in handles {
@@ -224,8 +233,8 @@ impl<'a, T, K> TestCase<T, K>
     }
 }
 
-impl<T: TestContext, K> TestStep<T, K> {
-    pub fn new(step_name: &'static str, action: fn(&Arc::<Mutex::<T>>) -> Result<(), K>) -> Self {
+impl<T: TestContext> TestStep<T> {
+    pub fn new(step_name: &'static str, action: fn(&Arc::<Mutex::<T>>) -> Result<(), i32>) -> Self {
         TestStep {
             step_name,
             action,

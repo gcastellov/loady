@@ -12,26 +12,27 @@ struct InnerContext {
 
 fn main() {
 
-    let positive_callback = |_: &Arc::<Mutex::<TestCaseContext::<InnerContext>>>| -> Result<(), u32> {
-        thread::sleep(Duration::from_millis(50));
-        Ok(())
-    };
-
-    let negative_callback = |_: &Arc::<Mutex::<TestCaseContext::<InnerContext>>>| -> Result<(), u32> {        
+    let callback = |_: &Arc::<Mutex::<TestCaseContext::<InnerContext>>>| -> Result<(), i32> {        
         thread::sleep(Duration::from_millis(25));
 
         let mut rng = rand::thread_rng();
-        let mut nums: Vec<u32> = (400..410).collect();
+        let mut nums: Vec<i32> = (400..410).collect();
+        nums.push(200);
         nums.shuffle(&mut rng);
 
-        Err(*nums.get(0).unwrap())
+        let code = nums.get(0).unwrap();
+
+        match code {
+            200 => Ok(()),
+            _ => Err(*code)
+        }
     };
 
-    let test_case = TestCaseBuilder::<InnerContext, u32>
+    let test_case = TestCaseBuilder::<InnerContext>
         ::new("simple sample", "samples")
-        .with_step("first", positive_callback)
+        .with_step("first", callback)
             .with_stage("warm up", Duration::from_secs(10), Duration::from_secs(1), 1)
-        .with_step("second", negative_callback)
+        .with_step("second", callback)
             .with_stage("load", Duration::from_secs(20), Duration::from_secs(1), 10)
         .build();
 

@@ -21,8 +21,7 @@ pub struct Exporter {
 }
 
 #[derive(Default)]
-struct Localization {   
-}
+struct Localization;
 
 trait Content {
     fn as_csv(&self, locale: &Localization) -> String;
@@ -80,7 +79,7 @@ impl Content for StepStatus {
 
 impl Content for Metrics {
     fn as_txt(&self, locale: &Localization) -> String {        
-        format!("{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n\r\n{: <20}: {}\r\n{: <20}: {}\r\n{: <20}: {}", 
+        let mut content = format!("{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n\r\n{: <20}: {}\r\n{: <20}: {}\r\n{: <20}: {}", 
             "Test Duration",
             locale.format_duration(&self.test_duration),
             "Min Time",
@@ -95,11 +94,20 @@ impl Content for Metrics {
             locale.format_number(&self.positive_hits),
             "Unsuccessul hits",
             locale.format_number(&self.negative_hits)
-        )
+        );
+
+
+        if self.errors.len() > 0 {
+            content += &self.errors
+                .iter()
+                .fold(format!("\r\n\r\n{: <20}:\r\n\r\n", "Errors count"), |curr, (key, val)| curr + &format!("{: <20}: {:}\r\n", key, val));
+        }
+
+        content
     }
 
     fn as_csv(&self, locale: &Localization) -> String {
-        format!("{:};{:};{:};{:};{};{};{}", 
+        let mut content = format!("{:};{:};{:};{:};{};{};{}", 
             locale.format_duration(&self.test_duration),
             locale.format_duration(&self.min_time),
             locale.format_duration(&self.mean_time),
@@ -107,7 +115,15 @@ impl Content for Metrics {
             locale.format_number(&self.all_hits),
             locale.format_number(&self.positive_hits),
             locale.format_number(&self.negative_hits)
-        )
+        );
+
+        if self.errors.len() > 0 {
+            content = self.errors
+                .iter()
+                .fold(content, |curr, (key, val)| curr + &format!(";{};{}", key, val));
+        }
+
+        content
     }
 }
 
