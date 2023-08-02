@@ -7,6 +7,9 @@ pub struct Metrics {
     pub mean_time: u128,
     pub max_time: u128,
     pub min_time: u128,
+    pub p90_time: u128,
+    pub p95_time: u128,
+    pub p99_time: u128,
     pub positive_hits: u128,
     pub negative_hits: u128,
     pub all_hits: u128,
@@ -50,15 +53,23 @@ impl StepStatus  {
 }
 
 impl Metrics {
+
+    const P90: f64 = 0.9;
+    const P95: f64 = 0.95;
+    const P99: f64 = 0.99;
+
     fn new(test_context: Box<impl TestContext>) -> Self {
         Metrics {
             test_duration: test_context.get_current_duration().as_millis(),
             positive_hits: test_context.get_successful_hits(),
             negative_hits: test_context.get_unsuccessful_hits(),
-            min_time: test_context.get_current_min_time().as_millis(), 
-            max_time: test_context.get_current_max_time().as_millis(),
-            mean_time: test_context.get_current_mean_time().as_millis(),
             all_hits: test_context.get_successful_hits() + test_context.get_unsuccessful_hits(),
+            min_time: test_context.get_current_min_time(), 
+            max_time: test_context.get_current_max_time(),
+            mean_time: test_context.get_current_mean_time(),
+            p90_time: test_context.get_current_percentile_time(Self::P90),
+            p95_time: test_context.get_current_percentile_time(Self::P95),
+            p99_time: test_context.get_current_percentile_time(Self::P99),
             errors: test_context.get_current_errors()
         }
     }

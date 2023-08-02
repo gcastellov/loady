@@ -68,16 +68,18 @@ impl TestRunner {
             
             while let Ok(inner_ctx) = rx_action.recv() {
                 let action_sinks = action_sinks.clone();
-                let step_status = StepStatus::new(
-                    test_case.test_name.to_owned(), 
-                    Box::new(inner_ctx));
 
                 if !action_sinks.is_empty() && frequency_instant.elapsed() > reporting_frequency {
+
+                    let step_status = StepStatus::new(
+                        test_case.test_name.to_owned(), 
+                        Box::new(inner_ctx));
+
                     report_step_status(true, step_status, action_sinks);
                     frequency_instant = Instant::now();                    
                 }
                 
-                thread::sleep(Duration::from_millis(50));
+                thread::sleep(Duration::from_millis(25));
             }
         });
 

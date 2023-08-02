@@ -5,7 +5,7 @@ use std::sync::mpsc;
 use std::fmt::Debug;
 use std::marker::Sync;
 use uuid::Uuid;
-use std::collections::HashMap;
+use std::collections::{HashMap,BTreeSet};
 
 pub mod stats;
 pub mod reporting;
@@ -21,9 +21,10 @@ pub trait TestContext : Default + Clone + Send {
     fn get_session_id(&self) -> String;
     fn get_current_duration(&self) -> Duration;
     fn get_current_step_name(&self) -> String;
-    fn get_current_mean_time(&self) -> Duration;
-    fn get_current_min_time(&self) -> Duration;
-    fn get_current_max_time(&self) -> Duration;
+    fn get_current_mean_time(&self) -> u128;
+    fn get_current_min_time(&self) -> u128;
+    fn get_current_max_time(&self) -> u128;
+    fn get_current_percentile_time(&self, percentile: f64) -> u128;
     fn get_current_errors(&self) -> HashMap<i32, u128>;
     fn set_current_step(&mut self, step_name: &'static str, stage_name: &'static str);
     fn set_current_duration(&mut self, duration: Duration);    
@@ -34,9 +35,7 @@ struct TestCaseMetrics {
     successful_hits: u128,
     unsuccessful_hits: u128,
     test_duration: Duration,
-    mean_time: Duration,
-    max_time: Duration,
-    min_time: Duration, 
+    elapsed_times: BTreeSet<u128>,
     errors: HashMap<i32, u128>
 }
 
@@ -98,20 +97,8 @@ impl<'a, T> TestContext for TestCaseContext<'a, T>
         } else {
             self.test_metrics.successful_hits += 1;
         }
-        
-        if self.test_metrics.min_time == Duration::from_millis(0) || self.test_metrics.min_time > duration {
-            self.test_metrics.min_time = duration;
-        }
-        if self.test_metrics.max_time < duration {
-            self.test_metrics.max_time = duration;
-        }
 
-        let count = match self.test_metrics.successful_hits + self.test_metrics.unsuccessful_hits {
-            1.. => 2,
-            _ => 1
-        };
-
-        self.test_metrics.mean_time = (self.test_metrics.mean_time + duration) / count;
+        self.test_metrics.elapsed_times.insert(duration.as_millis());
     }
 
     fn get_session_id(&self) -> String {
@@ -143,21 +130,33 @@ impl<'a, T> TestContext for TestCaseContext<'a, T>
         self.test_step_name.unwrap().to_string()
     }
 
-    fn get_current_mean_time(&self) -> Duration {
-        self.test_metrics.mean_time
+    fn get_current_mean_time(&self) -> u128 {
+        self.test_metrics.elapsed_times.iter().sum::<u128>() / self.test_metrics.elapsed_times.len() as u128
     }
 
-    fn get_current_max_time(&self) -> Duration {
-        self.test_metrics.max_time
+    fn get_current_max_time(&self) -> u128 {
+        *self.test_metrics.elapsed_times.last().unwrap_or(&0)
     }
 
-    fn get_current_min_time(&self) -> Duration {
-        self.test_metrics.min_time
+    fn get_current_min_time(&self) -> u128 {
+        *self.test_metrics.elapsed_times.first().unwrap_or(&0)
     }
 
-    fn get_current_errors(&self) -> HashMap<i32, u128> {
+    fn get_current_percentile_time(&self, percentile: f64) -> u128 {
+        let index = (self.test_metrics.elapsed_times.len() - 1) as f64 * percentile;
+        let lower_index = index.floor() as usize;
+        let upper_index = index.ceil() as usize;
+        
+        let lowest_value = *self.test_metrics.elapsed_times.iter().nth(lower_index).unwrap_or(&0);
+        let highest_value = *self.test_metrics.elapsed_times.iter().nth(upper_index).unwrap_or(&0);
+
+        let interpolated_value = lowest_value as f64 + (index - lower_index as f64) * (highest_value - lowest_value) as f64;
+        interpolated_value as u128
+    }
+
+    fn get_current_errors(&self) -> HashMap<i32, u128> {        
         self.test_metrics.errors.clone()
-    }
+    }    
 }
 
 impl<'a, T> TestCase<T> 

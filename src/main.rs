@@ -12,12 +12,16 @@ struct InnerContext;
 fn main() {
 
     let callback = |_: &Arc::<Mutex::<TestCaseContext::<InnerContext>>>| -> Result<(), i32> {        
-        thread::sleep(Duration::from_millis(25));
-
         let mut rng = rand::thread_rng();
         let mut nums: Vec<i32> = (400..410).collect();
+        let mut times: Vec<u64> = (25..200).collect();
+        
         nums.push(200);
         nums.shuffle(&mut rng);
+
+        times.shuffle(&mut rng);
+
+        thread::sleep(Duration::from_millis(*times.first().unwrap()));
 
         let code = nums.get(0).unwrap();
 
