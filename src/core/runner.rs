@@ -115,33 +115,39 @@ impl TestRunner {
         Ok(())
     }
 
-    pub fn with_default_reporting_sink(&mut self) {
+    pub fn with_default_reporting_sink(mut self) -> Self {
         let sink = DefaultReportingSink::default();
         self.with_reporting_sink(sink);
+        self
     }
 
-    pub fn with_reporting_sink<T: ReportingSink + 'static>(&mut self, sink: T) {
+    pub fn with_reporting_sink<T: ReportingSink + 'static>(&mut self, sink: T) -> &Self {
         self.reporting_sinks.push(Arc::new(Box::new(sink)));
+        self
     }
 
-    pub fn with_default_output_files(&mut self) {
+    pub fn with_default_output_files(mut self) -> Self {
         self.exporter.with_default_output_files();
+        self
     }
 
-    pub fn with_output_file(&mut self, file_type: FileType, directory: &str, file_name: &str) {
+    pub fn with_output_file(mut self, file_type: FileType, directory: &str, file_name: &str) -> Self {
         self.exporter.with_output_file(file_type, directory.to_string(), file_name.to_string());
+        self
     }
 
-    pub fn with_test_summary_std_out(&mut self) {
+    pub fn with_test_summary_std_out(mut self) -> Self {
         self.use_summary = true;
+        self
     }
 
-    pub fn with_reporting_frequency(&mut self, seconds: u64) {
+    pub fn with_reporting_frequency(mut self, seconds: u64) -> Self {
         if Self::DEFAULT_REPORTING_FREQUENCY.as_secs() > seconds {
             panic!("Reporting frequency must be greater than the default value {}", Self::DEFAULT_REPORTING_FREQUENCY.as_secs())
         }
 
         self.reporting_frequency = Duration::from_secs(seconds);
+        self
     }
    
     fn report_test_status<T>(&self, test_case: &TestCase<T>, stats_by_step: &Vec<StepStatus>) -> Result<(), Error>
