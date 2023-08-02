@@ -40,5 +40,5 @@ fn main() {
         .with_default_output_files()
         .with_test_summary_std_out()
         .with_reporting_frequency(5)
-        .run(test_case);    
+        .run(test_case);
 }

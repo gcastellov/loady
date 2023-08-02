@@ -1,13 +1,12 @@
-use std::time::{Duration};
 use std::collections::HashMap;
 use crate::core::{TestContext};
 
 #[derive(Clone, Debug)]
 pub struct Metrics {
-    pub test_duration: Duration,
-    pub mean_time: Duration,
-    pub max_time: Duration,
-    pub min_time: Duration,
+    pub test_duration: u128,
+    pub mean_time: u128,
+    pub max_time: u128,
+    pub min_time: u128,
     pub positive_hits: u128,
     pub negative_hits: u128,
     pub all_hits: u128,
@@ -53,12 +52,12 @@ impl StepStatus  {
 impl Metrics {
     fn new(test_context: Box<impl TestContext>) -> Self {
         Metrics {
-            test_duration: test_context.get_current_duration(),
+            test_duration: test_context.get_current_duration().as_millis(),
             positive_hits: test_context.get_successful_hits(),
             negative_hits: test_context.get_unsuccessful_hits(),
-            min_time: test_context.get_current_min_time(), 
-            max_time: test_context.get_current_max_time(),
-            mean_time: test_context.get_current_mean_time(),
+            min_time: test_context.get_current_min_time().as_millis(), 
+            max_time: test_context.get_current_max_time().as_millis(),
+            mean_time: test_context.get_current_mean_time().as_millis(),
             all_hits: test_context.get_successful_hits() + test_context.get_unsuccessful_hits(),
             errors: test_context.get_current_errors()
         }

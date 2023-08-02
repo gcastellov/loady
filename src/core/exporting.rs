@@ -1,4 +1,3 @@
-use std::time::{Duration};
 use std::fmt::{Formatter,Result,Display};
 use num_format::{Locale, ToFormattedString};
 use std::fs::File;
@@ -39,8 +38,8 @@ impl Localization {
         num.to_formatted_string(&Locale::en)
     }
 
-    fn format_duration(&self, duration: &Duration) -> String {
-        self.format_number(&duration.as_millis())
+    fn format_duration(&self, duration: &u128) -> String {
+        self.format_number(&duration)
     }
 }
 
@@ -79,7 +78,7 @@ impl Content for StepStatus {
 
 impl Content for Metrics {
     fn as_txt(&self, locale: &Localization) -> String {        
-        let mut content = format!("{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n\r\n{: <20}: {}\r\n{: <20}: {}\r\n{: <20}: {}", 
+        let mut content = format!("{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n\r\n{: <20}: {:}\r\n{: <20}: {:}\r\n{: <20}: {:}", 
             "Test Duration",
             locale.format_duration(&self.test_duration),
             "Min Time",
