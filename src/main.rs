@@ -6,9 +6,8 @@ use std::time::{Duration};
 use std::thread;
 use rand::prelude::*;
 
-#[derive(Default,Clone,Copy,Debug)]
-struct InnerContext {
-}
+#[derive(Default,Clone,Debug)]
+struct InnerContext;
 
 fn main() {
 

@@ -72,7 +72,7 @@ pub struct TestStepStage {
 }
 
 impl<'a, T> TestContext for TestCaseContext<'a, T> 
-    where T: Default + Clone + Copy + Send {
+    where T: Default + Clone + Send {
 
     fn new(test_name: &'static str, test_suite: &'static str) -> Self {
         TestCaseContext {

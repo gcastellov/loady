@@ -7,12 +7,12 @@ use crate::core::{TestCase,TestStep,TestCaseContext};
 pub mod core;
 
 pub struct TestCaseBuilder<'a, T> 
-    where T: 'static + Default + Clone + Copy + Send + Debug + Sync {
+    where T: 'static + Default + Clone + Send + Debug + Sync {
     pub test_case: TestCase<TestCaseContext<'a, T>>
 }
 
 impl<T> TestCaseBuilder<'static, T> 
-    where T: 'static + Default + Clone + Copy + Send + Debug + Sync {
+    where T: 'static + Default + Clone + Send + Debug + Sync {
     
     pub fn new(test_name: &'static str, test_suite: &'static str) -> Self {
         TestCaseBuilder {
