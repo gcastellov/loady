@@ -12,13 +12,13 @@ Once every step finishes, the runner will calculate and report these metrics. In
 | Unsuccessful hits count | number |
 | All hits count | number |
 | Errors count | number |
-| Test Duration| ms |
-| Min Time | ms |
-| Mean Time | ms |
-| Max Time | ms |
-| p90% Time | ms |
-| p95% Time | ms |
-| p99% Time | ms |
+| Test duration| ms |
+| Min time | ms |
+| Mean time | ms |
+| Max time | ms |
+| p90% time | ms |
+| p95% time | ms |
+| p99% time | ms |
 
 
 When you define the callback action of your testing step, return the error code once it fails. This way, the app will be able to collect and present how many errors occurred by error code.
