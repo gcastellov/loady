@@ -6,34 +6,37 @@ use std::thread;
 use rand::prelude::*;
 
 #[derive(Default,Clone,Debug)]
-struct InnerContext;
+struct InnerContext {
+    client_id: String,
+    secret: String
+}
 
 fn main() {
 
     let callback = |_: &Arc::<InnerContext>| -> Result<(), i32> {        
         let mut rng = rand::thread_rng();
         let mut nums: Vec<i32> = (400..410).collect();
-        let mut times: Vec<u64> = (25..200).collect();
-        
+        let mut times: Vec<u64> = (25..200).collect();        
         nums.push(200);
         nums.shuffle(&mut rng);
-
         times.shuffle(&mut rng);
 
         thread::sleep(Duration::from_millis(*times.first().unwrap()));
 
         let code = nums.get(0).unwrap();
-
         match code {
             200 => Ok(()),
             _ => Err(*code)
         }
     };
 
-    let data = InnerContext::default();
+    let ctx = InnerContext {
+        client_id: "the client id".to_string(),
+        secret: "the secret".to_string()
+    };
 
     let test_case = TestCaseBuilder::<InnerContext>
-        ::new("simple sample", "samples", &data)
+        ::new("simple sample", "samples", &ctx)
         .with_step("first", callback)
             .with_stage("warm up", Duration::from_secs(10), Duration::from_secs(1), 1)
         .with_step("second", callback)
