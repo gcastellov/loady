@@ -40,21 +40,21 @@ struct TestCaseMetrics {
 }
 
 #[derive(Default,Clone,Debug)]
-pub struct TestCaseContext<'a, T> {
+pub struct TestCaseContext<'a> {
     pub session_id: Uuid,
     pub test_name: &'a str,
     pub test_suite: &'a str,
     pub test_step_name: Option<&'a str>,
     pub test_stage_name: Option<&'a str>,
-    pub data: T,
     test_metrics: TestCaseMetrics
 }
 
-pub struct TestCase<T: TestContext> {
+pub struct TestCase<T: TestContext, U> {
     pub test_name: &'static str,
     pub test_suite: &'static str,
     pub test_context: Option<T>,
-    pub test_steps: Vec<TestStep<T>>
+    pub test_steps: Vec<TestStep<T>>,
+    pub data: U
 }
 
 pub struct TestStep<T> {
@@ -70,8 +70,7 @@ pub struct TestStepStage {
     rate: u32
 }
 
-impl<'a, T> TestContext for TestCaseContext<'a, T> 
-    where T: Default + Clone + Send {
+impl<'a> TestContext for TestCaseContext<'a> {
 
     fn new(test_name: &'static str, test_suite: &'static str) -> Self {
         TestCaseContext {
@@ -80,8 +79,7 @@ impl<'a, T> TestContext for TestCaseContext<'a, T>
             test_suite,
             test_step_name: None,
             test_stage_name: None,
-            test_metrics: TestCaseMetrics::default(),
-            data: T::default()
+            test_metrics: TestCaseMetrics::default()
         }
     }
 
@@ -159,15 +157,16 @@ impl<'a, T> TestContext for TestCaseContext<'a, T>
     }    
 }
 
-impl<'a, T> TestCase<T> 
-    where T: TestContext + 'static + Sync + Debug {
+impl<'a, T, U> TestCase<T, U> 
+    where T: TestContext + 'static + Sync + Debug, U: Default {
     
     pub fn new(test_name: &'static str, test_suite: &'static str) -> Self {        
-        TestCase::<T> {
+        TestCase::<T, U> {
             test_name,
             test_suite,
             test_context : None,
-            test_steps: Vec::default()
+            test_steps: Vec::default(),
+            data: U::default()
         }
     }
 

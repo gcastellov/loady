@@ -11,7 +11,7 @@ struct InnerContext;
 
 fn main() {
 
-    let callback = |_: &Arc::<Mutex::<TestCaseContext::<InnerContext>>>| -> Result<(), i32> {        
+    let callback = |_: &Arc::<Mutex::<TestCaseContext>>| -> Result<(), i32> {        
         let mut rng = rand::thread_rng();
         let mut nums: Vec<i32> = (400..410).collect();
         let mut times: Vec<u64> = (25..200).collect();
