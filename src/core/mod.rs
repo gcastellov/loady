@@ -40,7 +40,7 @@ struct TestCaseMetrics {
 }
 
 #[derive(Default,Clone,Debug)]
-struct TestCaseContext<'a> {
+pub struct TestCaseContext<'a> {
     pub session_id: Uuid,
     pub test_name: &'a str,
     pub test_suite: &'a str,
