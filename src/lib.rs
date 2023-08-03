@@ -14,9 +14,9 @@ pub struct TestCaseBuilder<'a, T>
 impl<T> TestCaseBuilder<'static, T> 
     where T: 'static + Default + Clone + Send + Debug + Sync {
     
-    pub fn new(test_name: &'static str, test_suite: &'static str) -> Self {
+    pub fn new(test_name: &'static str, test_suite: &'static str, data: &T) -> Self {
         TestCaseBuilder {
-            test_case: TestCase::<TestCaseContext, T>::new(test_name, test_suite)
+            test_case: TestCase::<TestCaseContext, T>::new(test_name, test_suite, data.to_owned())
         }
     }
 

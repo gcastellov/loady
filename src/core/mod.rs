@@ -160,13 +160,13 @@ impl<'a> TestContext for TestCaseContext<'a> {
 impl<'a, T, U> TestCase<T, U> 
     where T: TestContext + 'static + Sync + Debug, U: Default {
     
-    pub fn new(test_name: &'static str, test_suite: &'static str) -> Self {        
+    pub fn new(test_name: &'static str, test_suite: &'static str, data: U) -> Self {        
         TestCase::<T, U> {
             test_name,
             test_suite,
             test_context : None,
             test_steps: Vec::default(),
-            data: U::default()
+            data
         }
     }
 

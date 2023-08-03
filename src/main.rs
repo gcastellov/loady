@@ -31,8 +31,10 @@ fn main() {
         }
     };
 
+    let data = InnerContext::default();
+
     let test_case = TestCaseBuilder::<InnerContext>
-        ::new("simple sample", "samples")
+        ::new("simple sample", "samples", &data)
         .with_step("first", callback)
             .with_stage("warm up", Duration::from_secs(10), Duration::from_secs(1), 1)
         .with_step("second", callback)
