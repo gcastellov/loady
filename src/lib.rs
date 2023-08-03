@@ -1,4 +1,4 @@
-use std::sync::{Mutex,Arc};
+use std::sync::{Arc};
 use std::time::{Duration};
 use std::fmt::Debug;
 use std::marker::Sync;
@@ -20,7 +20,7 @@ impl<T> TestCaseBuilder<'static, T>
         }
     }
 
-    pub fn with_step(mut self, step_name: &'static str, action: fn(&Arc::<Mutex::<TestCaseContext>>) -> Result<(), i32>) -> Self {
+    pub fn with_step(mut self, step_name: &'static str, action: fn(&Arc::<T>) -> Result<(), i32>) -> Self {
         let step = TestStep::new(step_name, action);
         self.test_case.with_step(step);
         self

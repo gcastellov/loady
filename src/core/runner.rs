@@ -30,7 +30,7 @@ impl TestRunner {
     }
   
     pub fn run<'a, T, U>(&self, mut test_case: TestCase<T, U>) -> Result<(), Error>
-        where T: TestContext + 'static + Sync + Debug, U: Default {
+        where T: TestContext + 'static + Sync + Debug, U: 'static + Clone + Sync + Send {
 
         let report_step_status = |is_action: bool, step_status: StepStatus, sinks: Vec<Arc<Box<dyn ReportingSink>>>| {
             let mut sink_handles = Vec::default();

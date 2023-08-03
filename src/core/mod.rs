@@ -40,7 +40,7 @@ struct TestCaseMetrics {
 }
 
 #[derive(Default,Clone,Debug)]
-pub struct TestCaseContext<'a> {
+struct TestCaseContext<'a> {
     pub session_id: Uuid,
     pub test_name: &'a str,
     pub test_suite: &'a str,
@@ -53,13 +53,13 @@ pub struct TestCase<T: TestContext, U> {
     pub test_name: &'static str,
     pub test_suite: &'static str,
     pub test_context: Option<T>,
-    pub test_steps: Vec<TestStep<T>>,
+    pub test_steps: Vec<TestStep<U>>,
     pub data: U
 }
 
 pub struct TestStep<T> {
     step_name: &'static str,
-    action: fn(&Arc::<Mutex::<T>>) -> Result<(), i32>,
+    action: fn(&Arc::<T>) -> Result<(), i32>,
     stages: Vec<TestStepStage>
 }
 
@@ -158,7 +158,7 @@ impl<'a> TestContext for TestCaseContext<'a> {
 }
 
 impl<'a, T, U> TestCase<T, U> 
-    where T: TestContext + 'static + Sync + Debug, U: Default {
+    where T: TestContext + 'static + Sync + Debug, U: 'static + Clone + Sync + Send {
     
     pub fn new(test_name: &'static str, test_suite: &'static str, data: U) -> Self {        
         TestCase::<T, U> {
@@ -170,13 +170,14 @@ impl<'a, T, U> TestCase<T, U>
         }
     }
 
-    pub fn with_step(&mut self, test_step: TestStep<T>) {        
+    pub fn with_step(&mut self, test_step: TestStep<U>) {        
         self.test_steps.push(test_step);
     }
 
     pub fn run(&mut self, tx_action: &std::sync::mpsc::Sender::<T>, tx_step: &std::sync::mpsc::Sender::<T>) {
         
         let start_time = SystemTime::now();
+        let data = Arc::new(self.data.clone());
         let ctx = Arc::new(Mutex::new(T::new(self.test_name, self.test_suite)));
         let mut handles = Vec::default();
 
@@ -196,11 +197,12 @@ impl<'a, T, U> TestCase<T, U>
                     for _ in 0..test_stage.rate {
                         let action_transmitter = mpsc::Sender::clone(tx_action);
                         let t_ctx = Arc::clone(&ctx);
+                        let t_data = Arc::clone(&data);
                         let action = test_step.action.clone();
             
                         let handle = thread::spawn(move || {            
                             let action_start_time = SystemTime::now();                     
-                            let action_result = action(&t_ctx);
+                            let action_result = action(&t_data);
                             let mut inner_ctx = t_ctx.lock().unwrap();
                             inner_ctx.add_hit(action_result, action_start_time.elapsed().unwrap());
                             inner_ctx.set_current_duration(start_time.elapsed().unwrap());
@@ -231,8 +233,8 @@ impl<'a, T, U> TestCase<T, U>
     }
 }
 
-impl<T: TestContext> TestStep<T> {
-    pub fn new(step_name: &'static str, action: fn(&Arc::<Mutex::<T>>) -> Result<(), i32>) -> Self {
+impl<T> TestStep<T> {
+    pub fn new(step_name: &'static str, action: fn(&Arc::<T>) -> Result<(), i32>) -> Self {
         TestStep {
             step_name,
             action,
