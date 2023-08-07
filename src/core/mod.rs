@@ -58,13 +58,13 @@ pub struct TestCase<T: TestContext, U> {
 }
 
 pub struct TestStep<T> {
-    step_name: &'static str,
-    action: fn(&Arc::<T>) -> Result<(), i32>,
-    stages: Vec<TestStepStage>
+    pub step_name: &'static str,
+    pub stages: Vec<TestStepStage>,
+    action: fn(&Arc::<T>) -> Result<(), i32>
 }
 
 pub struct TestStepStage {
-    stage_name: &'static str,
+    pub stage_name: &'static str,
     during: Duration,
     interval: Duration,
     rate: u32
@@ -125,11 +125,12 @@ impl<'a> TestContext for TestCaseContext<'a> {
     }
 
     fn get_current_step_name(&self) -> String {
-        self.test_step_name.unwrap().to_string()
+        self.test_step_name.unwrap_or("").to_string()
     }
 
     fn get_current_mean_time(&self) -> u128 {
-        self.test_metrics.elapsed_times.iter().sum::<u128>() / self.test_metrics.elapsed_times.len() as u128
+        let sum = self.test_metrics.elapsed_times.iter().sum::<u128>();
+        sum.checked_div(self.test_metrics.elapsed_times.len() as u128).unwrap_or(0)
     }
 
     fn get_current_max_time(&self) -> u128 {
@@ -141,15 +142,23 @@ impl<'a> TestContext for TestCaseContext<'a> {
     }
 
     fn get_current_percentile_time(&self, percentile: f64) -> u128 {
-        let index = (self.test_metrics.elapsed_times.len() - 1) as f64 * percentile;
-        let lower_index = index.floor() as usize;
-        let upper_index = index.ceil() as usize;
-        
-        let lowest_value = *self.test_metrics.elapsed_times.iter().nth(lower_index).unwrap_or(&0);
-        let highest_value = *self.test_metrics.elapsed_times.iter().nth(upper_index).unwrap_or(&0);
 
-        let interpolated_value = lowest_value as f64 + (index - lower_index as f64) * (highest_value - lowest_value) as f64;
-        interpolated_value as u128
+        let calc_percentile = |value: usize| -> u128 {
+            let index = value as f64 * percentile;
+            let lower_index = index.floor() as usize;
+            let upper_index = index.ceil() as usize;
+            
+            let lowest_value = *self.test_metrics.elapsed_times.iter().nth(lower_index).unwrap_or(&0);
+            let highest_value = *self.test_metrics.elapsed_times.iter().nth(upper_index).unwrap_or(&0);
+    
+            let interpolated_value = lowest_value as f64 + (index - lower_index as f64) * (highest_value - lowest_value) as f64;
+            interpolated_value as u128
+        };
+
+        match self.test_metrics.elapsed_times.len().checked_sub(1) {
+            Some(value) => calc_percentile(value),
+            _ => 0
+        }
     }
 
     fn get_current_errors(&self) -> HashMap<i32, u128> {        

@@ -29,7 +29,7 @@ impl TestRunner {
         }
     }
   
-    pub fn run<'a, T, U>(&self, mut test_case: TestCase<T, U>) -> Result<(), Error>
+    pub fn run<'a, T, U>(&self, mut test_case: TestCase<T, U>) -> Result<TestStatus, Error>
         where T: TestContext + 'static + Sync + Debug, U: 'static + Clone + Sync + Send {
 
         let report_step_status = |is_action: bool, step_status: StepStatus, sinks: Vec<Arc<Box<dyn ReportingSink>>>| {
@@ -113,8 +113,8 @@ impl TestRunner {
         
 
         let by_step: Vec<StepStatus> = stats_by_step.lock().unwrap().clone();
-        self.report_test_status(&test_case, &by_step)?;
-        Ok(())
+        let test_status = self.report_test_status(&test_case, &by_step)?;
+        Ok(test_status)
     }
 
     pub fn with_default_reporting_sink(mut self) -> Self {
@@ -152,7 +152,7 @@ impl TestRunner {
         self
     }
    
-    fn report_test_status<T, U>(&self, test_case: &TestCase<T, U>, stats_by_step: &Vec<StepStatus>) -> Result<(), Error>
+    fn report_test_status<T, U>(&self, test_case: &TestCase<T, U>, stats_by_step: &Vec<StepStatus>) -> Result<TestStatus, Error>
         where T: TestContext + 'static + Sync + Debug {
 
         let ctx = test_case.test_context.clone().unwrap();
@@ -169,7 +169,7 @@ impl TestRunner {
             println!("\r\n{}\r\n", content);
         }
 
-        Ok(())
+        Ok(test_status)
     }
 
     fn write_to_sinks(&self, test_status: TestStatus) -> Result<(), Error> {
