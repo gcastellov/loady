@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::{Write};
 use crate::core::stats::{TestStatus,StepStatus,Metrics};
 
+#[derive(Eq,PartialEq,Debug)]
 pub enum FileType {
     Txt,
     Csv
@@ -167,18 +168,16 @@ impl FileType {
         };
 
         format!("{}", content)
-    }
+    }    
 
-    fn format_file_name(&self, file_name: &String) -> String {
-        let extension = match self {
-            Self::Csv => "csv",
-            Self::Txt => "txt"
-        };
+    fn get_extension(&self) -> &'static str {
 
-        if file_name.ends_with(extension) { 
-            file_name.to_owned() 
-        } else { 
-            format!("{}.{}", file_name, extension) 
+        const CSV_EXTENSION: &str = "csv";
+        const TXT_EXTENSION: &str = "txt";
+
+        match self {
+            Self::Csv => CSV_EXTENSION,
+            Self::Txt => TXT_EXTENSION
         }
     }
 }
@@ -189,6 +188,16 @@ impl ExportFile {
             file_type,
             directory, 
             file_name
+        }
+    }
+
+    fn format_file_name(&self) -> String {
+        let extension = self.file_type.get_extension();
+
+        if self.file_name.ends_with(extension) { 
+            self.file_name.to_owned() 
+        } else { 
+            format!("{}.{}", self.file_name, extension) 
         }
     }
 }
@@ -214,7 +223,7 @@ impl Exporter {
     pub fn write_output_files(&self, test_status: TestStatus, step_status: Vec<StepStatus>) -> std::io::Result<()> {
         for export_file in &self.export_files {
             let content = export_file.file_type.get_content(test_status.to_owned(), step_status.to_owned());
-            let file_name = export_file.file_type.format_file_name(&export_file.file_name);
+            let file_name = export_file.format_file_name();
             Self::write_file(&export_file.directory, &file_name, &content, &test_status.session_id)?;            
         }
 
@@ -231,3 +240,32 @@ impl Exporter {
     }
 }
 
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn given_filetype_when_getting_extension_then_returns_expected_value() {
+        assert_eq!(FileType::Txt.get_extension(), "txt");
+        assert_eq!(FileType::Csv.get_extension(), "csv");
+    }
+
+    #[test]
+    fn given_exporter_when_adding_default_export_types_then_loads_defaults() {
+        
+        let assert_file = |file: &ExportFile, expected_file_type: FileType| {
+            assert_eq!(file.file_type, expected_file_type);
+            assert!(!file.file_name.is_empty());
+            assert!(!file.directory.is_empty());
+        };
+        
+        let mut exporter = Exporter::default();
+        exporter.with_default_output_files();
+
+        assert_eq!(exporter.export_files.len(), 2);
+        assert_file(exporter.export_files.get(0).unwrap(), FileType::Txt);
+        assert_file(exporter.export_files.get(1).unwrap(), FileType::Csv);
+    }
+}

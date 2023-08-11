@@ -1,4 +1,5 @@
-use loady::core::{TestCase, TestCaseContext};
+use loady::core::{TestCase};
+use loady::core::context::{TestCaseContext};
 use crate::support::*;
 
 mod support;

@@ -40,9 +40,9 @@ impl TestRunner {
                 let status = step_status.to_owned();
                 let sink_handle = thread::spawn(move || {
                     if is_action {
-                        cloned_sink.on_action_ended(status);
+                        cloned_sink.on_load_action_ended(status);
                     } else {
-                        cloned_sink.on_step_ended(status);
+                        cloned_sink.on_load_step_ended(status);
                     }
                 });
 
@@ -54,21 +54,22 @@ impl TestRunner {
             }
         };
 
-        let (tx_action, rx_action) = mpsc::channel::<T>();
-        let (tx_step, rx_step) = mpsc::channel::<T>();
+        let (tx_load_action, rx_load_action) = mpsc::channel::<T>();
+        let (tx_load_step, rx_load_step) = mpsc::channel::<T>();
+        let (tx_internal_step, rx_internal_step) = mpsc::channel::<&str>();
 
         let action_sinks: Vec<Arc<Box<dyn ReportingSink>>> = self.reporting_sinks.clone();
         let step_sinks: Vec<Arc<Box<dyn ReportingSink>>> = self.reporting_sinks.clone();
+        let internal_step_sinks: Vec<Arc<Box<dyn ReportingSink>>> = self.reporting_sinks.clone();
+        
         let mut stats_by_step: Arc<Mutex<Vec<StepStatus>>> = Arc::new(Mutex::new(Vec::default()));
         let arc_stats_by_step = Arc::clone(&mut stats_by_step);
         let reporting_frequency = self.reporting_frequency.to_owned();
         
         let t_action_join = thread::spawn(move || { 
-            let mut frequency_instant = Instant::now();
-            
-            while let Ok(inner_ctx) = rx_action.recv() {
+            let mut frequency_instant = Instant::now();            
+            while let Ok(inner_ctx) = rx_load_action.recv() {
                 let action_sinks = action_sinks.clone();
-
                 if !action_sinks.is_empty() && frequency_instant.elapsed() > reporting_frequency {
 
                     let step_status = StepStatus::new(
@@ -78,13 +79,11 @@ impl TestRunner {
                     report_step_status(true, step_status, action_sinks);
                     frequency_instant = Instant::now();                    
                 }
-                
-                thread::sleep(Duration::from_millis(25));
             }
         });
 
         let t_step_join = thread::spawn(move || { 
-            while let Ok(inner_ctx) = rx_step.recv() {
+            while let Ok(inner_ctx) = rx_load_step.recv() {
                 let step_sinks = step_sinks.clone();
                 let step_status = StepStatus::new(
                     test_case.test_name.to_owned(), 
@@ -98,19 +97,42 @@ impl TestRunner {
                     .lock()
                     .unwrap()
                     .push(step_status);
-
-                thread::sleep(Duration::from_millis(50));
             }
         });
 
-        test_case.run(&tx_action, &tx_step);
+        let t_internal_step_join = thread::spawn(move || { 
+            while let Ok(step_name) = rx_internal_step.recv() {
 
-        drop(tx_action);
-        drop(tx_step);
-
-        t_action_join.join().unwrap();
-        t_step_join.join().unwrap();
+                let internal_step_sinks = internal_step_sinks.clone();
+                if !internal_step_sinks.is_empty() {
+                    let mut sink_handles = Vec::default();
+                    for sink in internal_step_sinks {
+                        let cloned_sink = Arc::clone(&sink);
+                        let sink_handle = thread::spawn(move || {
+                            cloned_sink.on_internal_step_ended(step_name);
+                        });
         
+                        sink_handles.push(sink_handle);
+                    }
+        
+                    for handle in sink_handles {
+                        handle.join().unwrap();
+                    }
+                }
+            }
+        });
+
+        test_case.run(&tx_load_action, &tx_load_step, &tx_internal_step);
+
+        drop(tx_load_action);
+        drop(tx_load_step);
+        drop(tx_internal_step);
+
+        let join_handles = vec![t_action_join, t_step_join, t_internal_step_join];
+
+        for handle in join_handles {
+            handle.join().unwrap();
+        }
 
         let by_step: Vec<StepStatus> = stats_by_step.lock().unwrap().clone();
         let test_status = self.report_test_status(&test_case, &by_step)?;
@@ -155,7 +177,7 @@ impl TestRunner {
     fn report_test_status<T, U>(&self, test_case: &TestCase<T, U>, stats_by_step: &Vec<StepStatus>) -> Result<TestStatus, Error>
         where T: TestContext + 'static + Sync + Debug {
 
-        let ctx = test_case.test_context.clone().unwrap();
+        let ctx = test_case.test_context.clone().unwrap_or(T::default());
 
         let test_status = TestStatus::new(
             test_case.test_name.to_owned(), 
@@ -186,7 +208,7 @@ impl TestRunner {
 
                 let sink_handle = thread::spawn(move || {
                     let t_status = status.lock().unwrap().clone();
-                    cloned_sink.on_tests_ended(t_status);
+                    cloned_sink.on_test_ended(t_status);
                 });
 
                 sink_handles.push(sink_handle);

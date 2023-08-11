@@ -1,53 +1,16 @@
 use std::time::{Duration, SystemTime};
 use std::sync::{Mutex,Arc};
-use std::thread;
-use std::sync::mpsc;
+use std::sync::mpsc::{Sender};
 use std::fmt::Debug;
 use std::marker::Sync;
-use uuid::Uuid;
-use std::collections::{HashMap,BTreeSet};
+use std::thread;
+use crate::core::context::TestContext;
 
+pub mod context;
 pub mod stats;
 pub mod reporting;
 pub mod exporting;
 pub mod runner;
-
-pub trait TestContext : Default + Clone + Send {
-    fn new(test_name: &'static str, test_suite: &'static str) -> Self;
-    fn add_hit(&mut self, result: Result<(), i32>, duration: Duration);
-    fn get_hits(&self) -> u128;
-    fn get_successful_hits(&self) -> u128;
-    fn get_unsuccessful_hits(&self) -> u128;
-    fn get_session_id(&self) -> String;
-    fn get_current_duration(&self) -> Duration;
-    fn get_current_step_name(&self) -> String;
-    fn get_current_mean_time(&self) -> u128;
-    fn get_current_min_time(&self) -> u128;
-    fn get_current_max_time(&self) -> u128;
-    fn get_current_percentile_time(&self, percentile: f64) -> u128;
-    fn get_current_errors(&self) -> HashMap<i32, u128>;
-    fn set_current_step(&mut self, step_name: &'static str, stage_name: &'static str);
-    fn set_current_duration(&mut self, duration: Duration);    
-}
-
-#[derive(Default,Clone,Debug)]
-struct TestCaseMetrics {
-    successful_hits: u128,
-    unsuccessful_hits: u128,
-    test_duration: Duration,
-    elapsed_times: BTreeSet<u128>,
-    errors: HashMap<i32, u128>
-}
-
-#[derive(Default,Clone,Debug)]
-pub struct TestCaseContext<'a> {
-    pub session_id: Uuid,
-    pub test_name: &'a str,
-    pub test_suite: &'a str,
-    pub test_step_name: Option<&'a str>,
-    pub test_stage_name: Option<&'a str>,
-    test_metrics: TestCaseMetrics
-}
 
 pub struct TestCase<T: TestContext, U> {
     pub test_name: &'static str,
@@ -57,118 +20,34 @@ pub struct TestCase<T: TestContext, U> {
     pub data: U
 }
 
-pub struct TestStep<T> {
-    pub step_name: &'static str,
-    pub stages: Vec<TestStepStage>,
-    action: fn(&Arc::<T>) -> Result<(), i32>
+pub enum TestStep<T> {
+    Init { 
+        action: fn(T) -> Result<T, i32>
+    },
+    Warmup { 
+        action: fn(&Arc::<T>), 
+        stages: Vec<TestStepStage> 
+    },
+    Load { 
+        name:  &'static str, 
+        stages: Vec<TestStepStage>, 
+        action: fn(&Arc::<T>) -> Result<(), i32> 
+    },
+    CleanUp { 
+        action: fn(T) 
+    }
 }
 
 pub struct TestStepStage {
-    pub stage_name: &'static str,
+    stage_name: &'static str,
     during: Duration,
     interval: Duration,
     rate: u32
 }
 
-impl<'a> TestContext for TestCaseContext<'a> {
-
-    fn new(test_name: &'static str, test_suite: &'static str) -> Self {
-        TestCaseContext {
-            session_id: Uuid::new_v4(),
-            test_name,
-            test_suite,
-            test_step_name: None,
-            test_stage_name: None,
-            test_metrics: TestCaseMetrics::default()
-        }
-    }
-
-    fn get_hits(&self) -> u128 {
-        self.test_metrics.successful_hits + self.test_metrics.unsuccessful_hits
-    }
-
-    fn add_hit(&mut self, result: Result<(), i32>, duration: Duration) {
-        
-        if let Err(code) = result {
-            self.test_metrics.unsuccessful_hits +=1;
-            *self.test_metrics.errors.entry(code).or_insert(0) += 1;
-        } else {
-            self.test_metrics.successful_hits += 1;
-        }
-
-        self.test_metrics.elapsed_times.insert(duration.as_millis());
-    }
-
-    fn get_session_id(&self) -> String {
-        self.session_id.to_string()
-    }
-
-    fn set_current_step(&mut self, step_name: &'static str, stage_name: &'static str) {
-        self.test_step_name = Some(step_name.clone());
-        self.test_stage_name = Some(stage_name.clone());
-    }
-
-    fn set_current_duration(&mut self, duration: Duration) {
-        self.test_metrics.test_duration = duration;
-    }
-
-    fn get_successful_hits(&self) -> u128 {
-        self.test_metrics.successful_hits
-    }
-
-    fn get_unsuccessful_hits(&self) -> u128 {
-        self.test_metrics.unsuccessful_hits
-    }
-
-    fn get_current_duration(&self) -> Duration {
-        self.test_metrics.test_duration
-    }
-
-    fn get_current_step_name(&self) -> String {
-        self.test_step_name.unwrap_or("").to_string()
-    }
-
-    fn get_current_mean_time(&self) -> u128 {
-        let sum = self.test_metrics.elapsed_times.iter().sum::<u128>();
-        sum.checked_div(self.test_metrics.elapsed_times.len() as u128).unwrap_or(0)
-    }
-
-    fn get_current_max_time(&self) -> u128 {
-        *self.test_metrics.elapsed_times.last().unwrap_or(&0)
-    }
-
-    fn get_current_min_time(&self) -> u128 {
-        *self.test_metrics.elapsed_times.first().unwrap_or(&0)
-    }
-
-    fn get_current_percentile_time(&self, percentile: f64) -> u128 {
-
-        let calc_percentile = |value: usize| -> u128 {
-            let index = value as f64 * percentile;
-            let lower_index = index.floor() as usize;
-            let upper_index = index.ceil() as usize;
-            
-            let lowest_value = *self.test_metrics.elapsed_times.iter().nth(lower_index).unwrap_or(&0);
-            let highest_value = *self.test_metrics.elapsed_times.iter().nth(upper_index).unwrap_or(&0);
-    
-            let interpolated_value = lowest_value as f64 + (index - lower_index as f64) * (highest_value - lowest_value) as f64;
-            interpolated_value as u128
-        };
-
-        match self.test_metrics.elapsed_times.len().checked_sub(1) {
-            Some(value) => calc_percentile(value),
-            _ => 0
-        }
-    }
-
-    fn get_current_errors(&self) -> HashMap<i32, u128> {        
-        self.test_metrics.errors.clone()
-    }    
-}
-
 impl<'a, T, U> TestCase<T, U> 
     where T: TestContext + 'static + Sync + Debug, U: 'static + Clone + Sync + Send {
-    
+
     pub fn new(test_name: &'static str, test_suite: &'static str, data: U) -> Self {        
         TestCase::<T, U> {
             test_name,
@@ -179,86 +58,247 @@ impl<'a, T, U> TestCase<T, U>
         }
     }
 
-    pub fn with_step(&mut self, test_step: TestStep<U>) {        
-        self.test_steps.push(test_step);
-    }
-
-    pub fn run(&mut self, tx_action: &std::sync::mpsc::Sender::<T>, tx_step: &std::sync::mpsc::Sender::<T>) {
+    pub fn with_step(&mut self, test_step: TestStep<U>) {
         
-        let start_time = SystemTime::now();
-        let data = Arc::new(self.data.clone());
-        let ctx = Arc::new(Mutex::new(T::new(self.test_name, self.test_suite)));
-        let mut handles = Vec::default();
+        match test_step {
+            TestStep::<U>::Init { .. } => if self.has_init_step() {
+                panic!("Only one Init Step can be used");
+            },
+            TestStep::<U>::Warmup { .. } => if self.has_warm_up_step() {
+                panic!("Only one Warm Up step can be used");
+            },
+            TestStep::<U>::CleanUp { .. } =>  if self.has_clean_up_step() {
+                panic!("Only one Clean Up step can be used")
+            },
+            _ => ()
+        };
 
-        for test_step in &self.test_steps {
+        self.test_steps.push(test_step);
+    }    
 
-            for test_stage in &test_step.stages {               
-
-                let mut step_ctx = ctx.lock().unwrap();
-                step_ctx.set_current_step(test_step.step_name, test_stage.stage_name);
-                step_ctx.set_current_duration(start_time.elapsed().unwrap());
-                drop(step_ctx);
-
-                let stage_start_time = SystemTime::now();
-
-                while stage_start_time.elapsed().unwrap() < test_stage.during {
-
-                    for _ in 0..test_stage.rate {
-                        let action_transmitter = mpsc::Sender::clone(tx_action);
-                        let t_ctx = Arc::clone(&ctx);
-                        let t_data = Arc::clone(&data);
-                        let action = test_step.action.clone();
-            
-                        let handle = thread::spawn(move || {            
-                            let action_start_time = SystemTime::now();                     
-                            let action_result = action(&t_data);
-                            let mut inner_ctx = t_ctx.lock().unwrap();
-                            inner_ctx.add_hit(action_result, action_start_time.elapsed().unwrap());
-                            inner_ctx.set_current_duration(start_time.elapsed().unwrap());
-                            action_transmitter.send(inner_ctx.to_owned()).unwrap();
-                        });
-            
-                        handles.push(handle);
-                    }
-
-                    thread::sleep(test_stage.interval);
-                }
-            }
-
-            let mut step_ctx = ctx.lock().unwrap();
-            step_ctx.set_current_duration(start_time.elapsed().unwrap());
-            
-            let step_transmitter = mpsc::Sender::clone(tx_step);
-            step_transmitter.send(step_ctx.to_owned()).unwrap();
+    pub fn run(&mut self, tx_action: &Sender::<T>, tx_step: &Sender::<T>, tx_internal_step: &Sender<&str>) {
+        
+        if !self.has_load_steps() {
+            return;
         }
 
-        for handle in handles {
-            handle.join().unwrap();
+        let start_time = SystemTime::now();
+        let mut owned_data = self.data.clone();        
+        let ctx = Arc::new(Mutex::new(T::new(self.test_name, self.test_suite)));
+
+        let mut steps = self.test_steps
+            .iter()
+            .map(|step|(step.get_order(), step))
+            .collect::<Vec<(i32, &TestStep<U>)>>();
+        
+        steps.sort_by(|(a, _), (b, _)|a.cmp(&b));
+
+        for (_, test_step) in steps {
+            match test_step {
+                TestStep::<U>::Init { action } => {                                        
+                    let result = action(self.data.to_owned()).unwrap();
+                    owned_data = result;
+                    tx_internal_step.send(test_step.get_name()).unwrap();
+                },
+                TestStep::<U>::Warmup { action, stages } => {
+                    let mut handles = Vec::default();
+                    let data = Arc::new(owned_data.clone());
+                    for test_stage in stages { 
+                        let stage_start_time = SystemTime::now();
+                        while stage_start_time.elapsed().unwrap() < test_stage.during {
+                            for _ in 0..test_stage.rate {
+                                let t_data = Arc::clone(&data);
+                                let action = action.clone();
+                                let handle = thread::spawn(move || {  
+                                    action(&t_data);
+                                });
+
+                                handles.push(handle);
+                            }
+
+                            thread::sleep(test_stage.interval);
+                        }
+                    }
+
+                    for handle in handles {
+                        handle.join().unwrap();
+                    }
+
+                    tx_internal_step.send(test_step.get_name()).unwrap();
+                },
+                TestStep::<U>::Load { name, stages, action } => {
+                    let mut handles = Vec::default();
+                    let data = Arc::new(owned_data.clone());
+                    for test_stage in stages {
+                        ctx
+                            .lock()
+                            .unwrap()
+                            .set_current_step(name, test_stage.stage_name);
+        
+                        let stage_start_time = SystemTime::now();
+        
+                        while stage_start_time.elapsed().unwrap() < test_stage.during {
+        
+                            for _ in 0..test_stage.rate {
+                                let action_transmitter = Sender::clone(tx_action);
+                                let t_ctx = Arc::clone(&ctx);
+                                let t_data = Arc::clone(&data);
+                                let action = action.clone();
+                    
+                                let handle = thread::spawn(move || {            
+                                    let action_start_time = SystemTime::now();                     
+                                    let action_result = action(&t_data);
+                                    let mut inner_ctx = t_ctx.lock().unwrap();
+                                    inner_ctx.add_hit(action_result, action_start_time.elapsed().unwrap());
+                                    inner_ctx.set_current_duration(start_time.elapsed().unwrap());
+                                    action_transmitter.send(inner_ctx.to_owned()).unwrap();
+                                });
+                    
+                                handles.push(handle);
+                            }
+        
+                            thread::sleep(test_stage.interval);
+                        }
+                    }
+
+                    for handle in handles {
+                        handle.join().unwrap();
+                    }
+
+                    let mut step_ctx = ctx.lock().unwrap();
+                    step_ctx.set_current_duration(start_time.elapsed().unwrap());                   
+                    tx_step.send(step_ctx.to_owned()).unwrap();
+                },
+                TestStep::<U>::CleanUp { action } => {
+                    action(self.data.to_owned());
+                    tx_internal_step.send(test_step.get_name()).unwrap();
+                }
+            };
         }
 
         let mut context = ctx.lock().unwrap();
         context.set_current_duration(start_time.elapsed().unwrap());
         self.test_context = Some(context.clone());        
     }
+
+    fn has_load_steps(&self) -> bool {
+        self.test_steps.iter().map(|step| match step {
+            TestStep::<U>::Load { stages, .. } => if stages.len() > 0 { Some(step) } else { None },
+            _ => None
+        })
+        .any(|step|step.is_some())
+    }
+
+    fn has_init_step(&self) -> bool {
+        self.test_steps.iter().find(|step| match step {
+            TestStep::<U>::Init { .. } => true,
+            _ => false
+        })
+        .is_some()
+    }
+
+    fn has_warm_up_step(&self) -> bool {
+        self.test_steps.iter().find(|step| match step {
+            TestStep::<U>::Warmup { .. } => true,
+            _ => false
+        })
+        .is_some()
+    }
+
+    fn has_clean_up_step(&self) -> bool {
+        self.test_steps.iter().find(|step| match step {
+            TestStep::<U>::CleanUp { .. } => true,
+            _ => false
+        })
+        .is_some()
+    }
 }
 
 impl<T> TestStep<T> {
-    pub fn new(step_name: &'static str, action: fn(&Arc::<T>) -> Result<(), i32>) -> Self {
-        TestStep {
-            step_name,
-            action,
-            stages: Vec::default()
+    pub fn as_init(action: fn(T) -> Result<T, i32>) -> Self {
+        Self::Init { action }
+    }
+
+    pub fn as_warm_up(action: fn(&Arc::<T>), stages: Vec<TestStepStage>) -> Self {
+        Self::Warmup { action, stages }
+    }
+
+    pub fn as_load(name: &'static str, action: fn(&Arc::<T>) -> Result<(), i32>, stages: Vec<TestStepStage>) -> Self {
+        Self::Load { name, action, stages }
+    }
+
+    pub fn as_clean_up(action: fn(T)) -> Self {
+        Self::CleanUp { action }
+    }
+
+    fn get_order(&self) -> i32 {
+        match self {
+            TestStep::<T>::Init { .. } => 1,
+            TestStep::<T>::Warmup { .. } => 2,
+            TestStep::<T>::Load { .. } => 3,
+            TestStep::<T>::CleanUp { .. } => 4
         }
     }
 
-    pub fn with_stage(&mut self, stage_name: &'static str, during: Duration, interval: Duration, rate: u32) {
-        let stage = TestStepStage {
-            stage_name,
-            during,
-            interval,
-            rate
-        };
+    fn get_name(&self) -> &'static str {
+        const INTERNAL_INIT_STEP_NAME: &str = "Init";
+        const INTERNAL_WARM_UP_STEP_NAME: &str = "Warm Up";
+        const INTERNAL_CLEAN_UP_STEP_NAME: &str = "Clean Up";
 
-        self.stages.push(stage);
+        match self {
+            TestStep::<T>::Init { .. } => INTERNAL_INIT_STEP_NAME,
+            TestStep::<T>::Warmup { .. } => INTERNAL_WARM_UP_STEP_NAME,
+            TestStep::<T>::Load { name, .. } => name,
+            TestStep::<T>::CleanUp { .. } => INTERNAL_CLEAN_UP_STEP_NAME
+        }
+    }
+}
+
+impl TestStepStage {
+    pub fn new(stage_name: &'static str, during: Duration, interval: Duration, rate: u32) -> Self {
+        Self { stage_name, during, interval, rate }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::TestCaseContext;
+    use super::*;
+
+    const TEST_NAME: &str = "test name";
+    const TEST_SUITE: &str = "test_suite";
+
+    #[derive(Default,Clone)]
+    struct EmptyData;
+
+    #[test]
+    #[should_panic]
+    fn given_test_case_with_init_step_when_adding_additional_init_step_then_panics() {
+        let first_init_step = TestStep::<EmptyData>::as_init(|data|{ Ok(data.to_owned()) });
+        let second_init_step = TestStep::<EmptyData>::as_init(|data|{ Ok(data.to_owned()) });
+        let mut test_case = TestCase::<TestCaseContext, EmptyData>::new(TEST_NAME, TEST_SUITE, EmptyData::default());
+        test_case.with_step(first_init_step);
+        test_case.with_step(second_init_step);        
+    }
+
+    #[test]
+    #[should_panic]
+    fn given_test_case_with_clean_up_step_when_adding_additional_clean_up_step_then_panics() {
+        let first_init_step = TestStep::<EmptyData>::as_clean_up(|_|{ });
+        let second_init_step = TestStep::<EmptyData>::as_clean_up(|_|{ });
+        let mut test_case = TestCase::<TestCaseContext, EmptyData>::new(TEST_NAME, TEST_SUITE, EmptyData::default());
+        test_case.with_step(first_init_step);
+        test_case.with_step(second_init_step);        
+    }
+
+    #[test]
+    #[should_panic]
+    fn given_test_case_with_warm_up_step_when_adding_additional_warm_up_step_then_panics() {
+        let first_init_step = TestStep::<EmptyData>::as_warm_up(|_|{ }, Vec::default());
+        let second_init_step = TestStep::<EmptyData>::as_warm_up(|_|{ }, Vec::default());
+        let mut test_case = TestCase::<TestCaseContext, EmptyData>::new(TEST_NAME, TEST_SUITE, EmptyData::default());
+        test_case.with_step(first_init_step);
+        test_case.with_step(second_init_step);        
     }
 }
