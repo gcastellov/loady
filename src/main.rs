@@ -1,4 +1,4 @@
-use loady::{TestCaseBuilder};
+use loady::utils::{TestCaseBuilder};
 use loady::core::runner::{TestRunner};
 use std::sync::{Arc};
 use std::time::{Duration};

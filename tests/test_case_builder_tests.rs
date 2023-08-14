@@ -1,7 +1,6 @@
 use std::sync::{Arc};
 use std::time::{Duration};
-use loady::{TestCaseBuilder};
-use loady::core::{TestCase};
+use loady::utils::{TestCaseBuilder};
 use crate::support::*;
 
 mod support;
