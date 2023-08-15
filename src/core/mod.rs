@@ -265,6 +265,7 @@ mod tests {
 
     use crate::core::context::TestCaseContext;
     use super::*;
+    use std::matches;
 
     const TEST_NAME: &str = "test name";
     const TEST_SUITE: &str = "test_suite";
@@ -346,5 +347,29 @@ mod tests {
 
             assert_eq!(*index, expected_index);
         }
+    }
+
+    #[test]
+    fn when_creating_new_step_as_init_then_returns_expected_type() {
+        let step = TestStep::<EmptyData>::as_init(|_|{ Ok(EmptyData::default()) });
+        assert!(matches!(step, TestStep::<EmptyData>::Init { .. }));    
+    }
+
+    #[test]
+    fn when_creating_new_step_as_warm_up_then_returns_expected_type() {
+        let step = TestStep::<EmptyData>::as_warm_up(|_|{}, Vec::default());
+        assert!(matches!(step, TestStep::<EmptyData>::WarmUp { .. }));    
+    }
+
+    #[test]
+    fn when_creating_new_step_as_load_then_returns_expected_type() {
+        let step = TestStep::<EmptyData>::as_load("step", |_|{Ok(())}, Vec::default());
+        assert!(matches!(step, TestStep::<EmptyData>::Load { .. }));    
+    }
+
+    #[test]
+    fn when_creating_new_step_as_clean_up_then_returns_expected_type() {
+        let step = TestStep::<EmptyData>::as_clean_up(|_|{});
+        assert!(matches!(step, TestStep::<EmptyData>::CleanUp { .. }));    
     }
 }
