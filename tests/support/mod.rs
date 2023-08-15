@@ -14,4 +14,4 @@ pub const TEST_STAGE_1: &'static str = "warm up";
 pub const TEST_STAGE_2: &'static str = "load";
 
 #[derive(Default,Clone,Debug)]
-pub struct InnerContext;
+pub struct EmptyData;

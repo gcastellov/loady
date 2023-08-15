@@ -9,7 +9,7 @@ mod support;
 
 #[test]
 fn given_test_with_no_steps_when_running_test_then_runs_and_returns_blank_results() {
-    let test_case = TestCase::<TestCaseContext, InnerContext>::new(TEST_NAME, TEST_SUITE, InnerContext::default());
+    let test_case = TestCase::<TestCaseContext, EmptyData>::new(TEST_NAME, TEST_SUITE, EmptyData::default());
     let runner = TestRunner::new();
 
     let actual = runner.run(test_case);
@@ -21,8 +21,8 @@ fn given_test_with_no_steps_when_running_test_then_runs_and_returns_blank_result
 
 #[test]
 fn given_test_with_steps_without_stages_when_running_test_then_runs_and_returns_blank_results() {
-    let mut test_case = TestCase::<TestCaseContext, InnerContext>::new(TEST_NAME, TEST_SUITE, InnerContext::default());
-    let test_step = TestStep::<InnerContext>::as_load(TEST_STEP_1, |_: &Arc<InnerContext>| { Ok(()) }, Vec::default());
+    let mut test_case = TestCase::<TestCaseContext, EmptyData>::new(TEST_NAME, TEST_SUITE, EmptyData::default());
+    let test_step = TestStep::<EmptyData>::as_load(TEST_STEP_1, |_: &Arc<EmptyData>| { Ok(()) }, Vec::default());
     test_case.with_step(test_step);
     let runner = TestRunner::new();
     
