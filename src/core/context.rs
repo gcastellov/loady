@@ -134,3 +134,115 @@ impl<'a> TestContext for TestCaseContext<'a> {
         self.test_metrics.errors.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    fn seed_with_hits(ctx: &mut impl TestContext) {
+        let hits = vec![
+            (Ok(()), Duration::from_millis(100)), 
+            (Ok(()), Duration::from_millis(130)), 
+            (Ok(()), Duration::from_millis(80)), 
+            (Err(401), Duration::from_millis(200)),
+            (Err(402), Duration::from_millis(300)),
+            (Ok(()), Duration::from_millis(150)), 
+        ];
+
+        for (result, duration) in hits {
+            ctx.add_hit(result, duration);
+        }
+    }
+
+    #[test]
+    fn given_default_test_context_when_getting_values_then_returns_defaults() {
+        let ctx = TestCaseContext::default();
+
+        assert!(!ctx.get_session_id().is_empty());
+        assert_eq!(ctx.get_current_step_name(), String::from(""));
+        assert_eq!(ctx.get_current_duration(), Duration::default());
+        assert_eq!(ctx.get_current_errors(), HashMap::default());        
+        assert_eq!(ctx.get_current_min_time(), 0);
+        assert_eq!(ctx.get_current_mean_time(), 0);
+        assert_eq!(ctx.get_current_max_time(), 0);
+        assert_eq!(ctx.get_current_percentile_time(0.95), 0);
+        assert_eq!(ctx.get_current_percentile_time(0.97), 0);
+        assert_eq!(ctx.get_current_percentile_time(0.99), 0);
+        assert_eq!(ctx.get_hits(), 0);
+        assert_eq!(ctx.get_successful_hits(), 0);
+        assert_eq!(ctx.get_unsuccessful_hits(), 0);
+    }
+
+    #[test]
+    fn given_set_of_results_when_getting_min_time_then_returns_exepected_value() {
+        let mut ctx = TestCaseContext::default();
+        seed_with_hits(&mut ctx);
+
+        let actual = ctx.get_current_min_time();
+
+        assert_eq!(actual, Duration::from_millis(80).as_millis());
+    }
+
+    #[test]
+    fn given_set_of_results_when_getting_max_time_then_returns_exepected_value() {
+        let mut ctx = TestCaseContext::default();
+        seed_with_hits(&mut ctx);
+
+        let actual = ctx.get_current_max_time();
+
+        assert_eq!(actual, Duration::from_millis(300).as_millis());
+    }
+
+    #[test]
+    fn given_set_of_results_when_getting_mean_time_then_returns_exepected_value() {
+        let mut ctx = TestCaseContext::default();
+        seed_with_hits(&mut ctx);
+
+        let actual = ctx.get_current_mean_time();
+
+        assert_eq!(actual, Duration::from_millis(160).as_millis());
+    }
+
+    #[test]
+    fn given_set_of_results_when_getting_successful_hits_then_returns_exepected_value() {
+        let mut ctx = TestCaseContext::default();
+        seed_with_hits(&mut ctx);
+
+        let actual = ctx.get_successful_hits();
+
+        assert_eq!(actual, 4);
+    }
+
+    #[test]
+    fn given_set_of_results_when_getting_unsuccessful_hits_then_returns_exepected_value() {
+        let mut ctx = TestCaseContext::default();
+        seed_with_hits(&mut ctx);
+
+        let actual = ctx.get_unsuccessful_hits();
+
+        assert_eq!(actual, 2);
+    }
+
+    #[test]
+    fn given_set_of_results_when_getting_all_hits_then_returns_exepected_value() {
+        let mut ctx = TestCaseContext::default();
+        seed_with_hits(&mut ctx);
+
+        let actual = ctx.get_hits();
+
+        assert_eq!(actual, 6);
+    }
+
+    #[test]
+    fn given_set_of_results_when_getting_errors_then_returns_exepected_value() {
+        let mut ctx = TestCaseContext::default();
+        seed_with_hits(&mut ctx);
+
+        let actual = ctx.get_current_errors();
+
+        assert_eq!(actual.len(), 2);
+        assert_eq!(actual.get(&401), Some(&1));
+        assert_eq!(actual.get(&402), Some(&1));
+    }
+}
