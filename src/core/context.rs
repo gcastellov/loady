@@ -15,6 +15,7 @@ pub trait TestContext : Default + Clone + Send {
     fn get_current_min_time(&self) -> u128;
     fn get_current_max_time(&self) -> u128;
     fn get_current_percentile_time(&self, percentile: f64) -> u128;
+    fn get_current_std_dev(&self) -> u128;
     fn get_current_errors(&self) -> HashMap<i32, u128>;
     fn set_current_step(&mut self, step_name: &'static str, stage_name: &'static str);
     fn set_current_duration(&mut self, duration: Duration);    
@@ -130,6 +131,17 @@ impl<'a> TestContext for TestCaseContext<'a> {
         }
     }
 
+    fn get_current_std_dev(&self) -> u128 {
+        let mean_time = self.get_current_mean_time() as i128;
+        let sum = self.test_metrics.elapsed_times
+            .iter()
+            .map(|time|(*time as i128 - mean_time).pow(2))
+            .sum::<i128>();
+
+        let div = sum.checked_div(self.test_metrics.elapsed_times.len() as i128).unwrap_or(0) as f64;
+        f64::sqrt(div).round() as u128
+    }
+
     fn get_current_errors(&self) -> HashMap<i32, u128> {        
         self.test_metrics.errors.clone()
     }
@@ -181,7 +193,7 @@ mod tests {
 
         let actual = ctx.get_current_min_time();
 
-        assert_eq!(actual, Duration::from_millis(80).as_millis());
+        assert_eq!(actual, 80);
     }
 
     #[test]
@@ -191,7 +203,7 @@ mod tests {
 
         let actual = ctx.get_current_max_time();
 
-        assert_eq!(actual, Duration::from_millis(300).as_millis());
+        assert_eq!(actual, 300);
     }
 
     #[test]
@@ -201,7 +213,17 @@ mod tests {
 
         let actual = ctx.get_current_mean_time();
 
-        assert_eq!(actual, Duration::from_millis(160).as_millis());
+        assert_eq!(actual, 160);
+    }
+
+    #[test]
+    fn given_set_of_results_when_getting_std_dev_then_returns_exepected_value() {
+        let mut ctx = TestCaseContext::default();
+        seed_with_hits(&mut ctx);
+
+        let actual = ctx.get_current_std_dev();
+
+        assert_eq!(actual, 73);
     }
 
     #[test]

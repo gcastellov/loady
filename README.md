@@ -46,6 +46,7 @@ Once every step finishes, the runner will calculate and report these metrics. In
 | Min time | ms |
 | Mean time | ms |
 | Max time | ms |
+| Standard Deviation | ms |
 | p90% time | ms |
 | p95% time | ms |
 | p99% time | ms |
