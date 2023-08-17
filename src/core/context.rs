@@ -245,4 +245,27 @@ mod tests {
         assert_eq!(actual.get(&401), Some(&1));
         assert_eq!(actual.get(&402), Some(&1));
     }
+
+    #[test]
+    fn given_step_name_when_getting_current_step_name_then_returns_expected_value() {
+        const STEP_NAME: &str = "STEP NAME";
+        const STAGE_NAME: &str  = "STAGE NAME";        
+        let mut ctx = TestCaseContext::default();
+        ctx.set_current_step(STEP_NAME, STAGE_NAME);
+
+        let actual = ctx.get_current_step_name();
+
+        assert_eq!(actual, STEP_NAME);
+    }
+
+    #[test]
+    fn given_test_duration_when_getting_current_duration_then_returns_expected_value() {        
+        let duration = Duration::from_secs(2);
+        let mut ctx = TestCaseContext::default();
+        ctx.set_current_duration(duration);
+
+        let actual = ctx.get_current_duration();
+        
+        assert_eq!(actual, duration);
+    }
 }
