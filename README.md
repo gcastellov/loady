@@ -1,4 +1,4 @@
-# Loady [WIP]
+# Loady
 
 [![Rust](https://github.com/gcastellov/loady/actions/workflows/rust.yml/badge.svg)](https://github.com/gcastellov/loady/actions/workflows/rust.yml)
 
@@ -57,7 +57,7 @@ When you define the callback action of your testing step, return the error code 
 Be aware that on_action_ended is triggered depending on the reporting frequency setting.
 
 ### Exporting
-Tests run metrics can be saved into TXT and CSV files to later digest the data. 
+Tests metrics can be saved into TXT, CSV or JSON files to later digest the data. 
 
 By default the library creates a directory called *output* inside the binary directory and saves the files there. However, you can define the location for any of them.
 

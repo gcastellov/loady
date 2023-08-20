@@ -2,17 +2,20 @@ use std::fmt::{Formatter,Result,Display};
 use num_format::{Locale, ToFormattedString};
 use std::fs::File;
 use std::io::{Write};
+use serde::{Serialize};
 use crate::core::stats::{TestStatus,StepStatus,Metrics};
 
 #[derive(Eq,PartialEq,Debug)]
 pub enum FileType {
     Txt,
-    Csv
+    Csv,
+    Json
 }
 
-enum FileContent {
-    Txt(TestStatus, Vec<StepStatus>),
-    Csv(TestStatus, Vec<StepStatus>)
+enum FileContent<'a> {
+    Txt(TestReport<'a>),
+    Csv(TestReport<'a>),
+    Json(TestReport<'a>)
 }
 
 #[derive(Default)]
@@ -23,9 +26,10 @@ pub struct Exporter {
 #[derive(Default)]
 struct Localization;
 
-trait Content {
-    fn as_csv(&self, locale: &Localization) -> String;
-    fn as_txt(&self, locale: &Localization) -> String;
+#[derive(Serialize)]
+struct TestReport<'a> {
+    test_status: &'a TestStatus,
+    step_status: &'a [StepStatus]
 }
 
 struct ExportFile {
@@ -44,7 +48,7 @@ impl Localization {
     }
 }
 
-impl Content for TestStatus {
+impl TestStatus {
     fn as_txt(&self, locale: &Localization) -> String {
         format!("{: <20}: {}\r\n{: <20}: {}\r\n\r\n{}", 
             "Session ID",
@@ -62,7 +66,7 @@ impl Content for TestStatus {
     }
 }
 
-impl Content for StepStatus {
+impl StepStatus {
     fn as_txt(&self, locale: &Localization) -> String {
         format!("{: <20}: {}\r\n\r\n{}", 
             "Test Step",
@@ -77,7 +81,7 @@ impl Content for StepStatus {
     }
 }
 
-impl Content for Metrics {
+impl Metrics {
     fn as_txt(&self, locale: &Localization) -> String {        
         let mut content = format!("{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n\r\n{: <20}: {:}\r\n{: <20}: {:}\r\n{: <20}: {:}", 
             "Test Duration",
@@ -139,7 +143,7 @@ impl Content for Metrics {
     }
 }
 
-impl Display for FileContent {    
+impl Display for FileContent<'_> {    
     fn fmt(&self, f: &mut Formatter<'_>) -> Result { 
         const STEP_SEPARATOR: &str = "\r\n\r\n----------------------------------------------------------------------\r\n\r\n";
         const NEW_LINE: &str = "\r\n";
@@ -147,15 +151,18 @@ impl Display for FileContent {
         let locale = Localization::default();
         
         let content = match self {
-            FileContent::Txt(test_status, steps_status) 
-                => steps_status
+            FileContent::Txt(report) 
+                => report.step_status
                     .iter()
-                    .fold(test_status.as_txt(&locale), |cur, nxt| cur + format!("{}{}", STEP_SEPARATOR, nxt.as_txt(&locale)).as_str()),
+                    .fold(report.test_status.as_txt(&locale), |cur, nxt| cur + format!("{}{}", STEP_SEPARATOR, nxt.as_txt(&locale)).as_str()),
             
-            FileContent::Csv(test_status, steps_status)
-                => steps_status
+            FileContent::Csv(report)
+                => report.step_status
                     .iter()
-                    .fold(String::from(""), |cur, nxt| cur + test_status.as_csv(&locale).as_str() + nxt.as_csv(&locale).as_str() + NEW_LINE),
+                    .fold(String::from(""), |cur, nxt| cur + report.test_status.as_csv(&locale).as_str() + nxt.as_csv(&locale).as_str() + NEW_LINE),
+
+            FileContent::Json(report)
+                => serde_json::to_string(report).unwrap()
         };
 
         write!(f, "{}", content)
@@ -165,22 +172,25 @@ impl Display for FileContent {
 impl FileType {
     
     pub fn get_content(&self, test_status: TestStatus, step_status: Vec<StepStatus>) -> String {
+        let report = TestReport {
+            test_status: &test_status,
+            step_status: step_status.as_slice(),
+        };
+
         let content = match self {            
-            Self::Csv => FileContent::Csv(test_status, step_status),
-            Self::Txt => FileContent::Txt(test_status, step_status)
+            Self::Csv => FileContent::Csv(report),
+            Self::Txt => FileContent::Txt(report),
+            Self::Json => FileContent::Json(report),
         };
 
         format!("{}", content)
     }    
 
     fn get_extension(&self) -> &'static str {
-
-        const CSV_EXTENSION: &str = "csv";
-        const TXT_EXTENSION: &str = "txt";
-
         match self {
-            Self::Csv => CSV_EXTENSION,
-            Self::Txt => TXT_EXTENSION
+            Self::Csv => "csv",
+            Self::Txt => "txt",
+            Self::Json => "json",
         }
     }
 }
@@ -217,6 +227,7 @@ impl Exporter {
 
         add_default(FileType::Txt);
         add_default(FileType::Csv);
+        add_default(FileType::Json);
     }
 
     pub fn with_output_file(&mut self, file_type: FileType, directory: String, file_name: String) {
@@ -267,8 +278,9 @@ mod tests {
         let mut exporter = Exporter::default();
         exporter.with_default_output_files();
 
-        assert_eq!(exporter.export_files.len(), 2);
+        assert_eq!(exporter.export_files.len(), 3);
         assert_file(exporter.export_files.get(0).unwrap(), FileType::Txt);
         assert_file(exporter.export_files.get(1).unwrap(), FileType::Csv);
+        assert_file(exporter.export_files.get(2).unwrap(), FileType::Json);
     }
 }

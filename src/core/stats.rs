@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use serde::{Serialize};
 use crate::core::{TestContext};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Metrics {
     pub test_duration: u128,
     pub mean_time: u128,
@@ -17,7 +18,7 @@ pub struct Metrics {
     pub errors: HashMap<i32, u128>
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct StepStatus {
     pub session_id: String,
     pub test_name: String,
@@ -25,7 +26,7 @@ pub struct StepStatus {
     pub metrics: Metrics
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct TestStatus {
     pub session_id: String,
     pub test_name: String,

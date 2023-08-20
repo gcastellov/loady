@@ -39,6 +39,7 @@ fn assert_blank_metrics(metrics: &Metrics) {
     assert_eq!(metrics.mean_time, 0);
     assert_eq!(metrics.min_time, 0);
     assert_eq!(metrics.max_time, 0);
+    assert_eq!(metrics.std_dev, 0);
     assert_eq!(metrics.p90_time, 0);
     assert_eq!(metrics.p95_time, 0);
     assert_eq!(metrics.p99_time, 0);
