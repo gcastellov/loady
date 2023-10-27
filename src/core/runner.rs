@@ -1,13 +1,15 @@
-use std::sync::{mpsc,Mutex,Arc};
-use std::thread;
-use std::time::{Duration,Instant};
+use tokio::time::{Instant,Duration};
+use tokio::sync::mpsc;
+use tokio::sync::Mutex;
 use std::fmt::Debug;
 use std::marker::Sync;
 use std::io::{Error};
+use std::sync::Arc;
 use crate::core::reporting::{ReportingSink,DefaultReportingSink};
 use crate::core::exporting::{Exporter,FileType};
 use crate::core::stats::{TestStatus,StepStatus};
-use crate::core::{TestCase,TestContext};
+use crate::core::context::TestContext;
+use crate::core::composition::{TestCase};
 
 pub struct TestRunner {
     reporting_sinks: Vec<Arc<Box<dyn ReportingSink>>>,
@@ -16,7 +18,7 @@ pub struct TestRunner {
     reporting_frequency: Duration
 }
 
-impl TestRunner {
+impl<'a> TestRunner {
 
     const DEFAULT_REPORTING_FREQUENCY: Duration = Duration::from_secs(5);
 
@@ -29,34 +31,25 @@ impl TestRunner {
         }
     }
   
-    pub fn run<'a, T, U>(&self, mut test_case: TestCase<T, U>) -> Result<TestStatus, Error>
+    pub async fn run<T, U>(&self, mut test_case: TestCase<'a, T, U>) -> Result<TestStatus, &str>
         where T: TestContext + 'static + Sync + Debug, U: 'static + Clone + Sync + Send {
 
-        let report_step_status = |is_action: bool, step_status: StepStatus, sinks: Vec<Arc<Box<dyn ReportingSink>>>| {
-            let mut sink_handles = Vec::default();
-            
+        let report_step_status = |is_action: bool, step_status: StepStatus, sinks: Vec<Arc<Box<dyn ReportingSink>>>| async move {
             for sink in sinks {
                 let cloned_sink = Arc::clone(&sink);
                 let status = step_status.to_owned();
-                let sink_handle = thread::spawn(move || {
-                    if is_action {
-                        cloned_sink.on_load_action_ended(status);
-                    } else {
-                        cloned_sink.on_load_step_ended(status);
-                    }
-                });
 
-                sink_handles.push(sink_handle);
-            }
-
-            for handle in sink_handles {
-                handle.join().unwrap();
+                if is_action {
+                    cloned_sink.on_load_action_ended(status).await;
+                } else {
+                    cloned_sink.on_load_step_ended(status).await;
+                }
             }
         };
 
-        let (tx_load_action, rx_load_action) = mpsc::channel::<T>();
-        let (tx_load_step, rx_load_step) = mpsc::channel::<T>();
-        let (tx_internal_step, rx_internal_step) = mpsc::channel::<&str>();
+        let (tx_load_action, mut rx_load_action) = mpsc::channel::<T>(10);
+        let (tx_load_step, mut rx_load_step) = mpsc::channel::<T>(10);
+        let (tx_internal_step, mut rx_internal_step) = mpsc::channel::<&str>(10);
 
         let action_sinks: Vec<Arc<Box<dyn ReportingSink>>> = self.reporting_sinks.clone();
         let step_sinks: Vec<Arc<Box<dyn ReportingSink>>> = self.reporting_sinks.clone();
@@ -66,9 +59,9 @@ impl TestRunner {
         let arc_stats_by_step = Arc::clone(&mut stats_by_step);
         let reporting_frequency = self.reporting_frequency.to_owned();
         
-        let t_action_join = thread::spawn(move || { 
+        let t_action_join = tokio::spawn(async move { 
             let mut frequency_instant = Instant::now();            
-            while let Ok(inner_ctx) = rx_load_action.recv() {
+            while let Some(inner_ctx) = rx_load_action.recv().await {
                 let action_sinks = action_sinks.clone();
                 if !action_sinks.is_empty() && frequency_instant.elapsed() > reporting_frequency {
 
@@ -76,67 +69,62 @@ impl TestRunner {
                         test_case.test_name.to_owned(), 
                         Box::new(inner_ctx));
 
-                    report_step_status(true, step_status, action_sinks);
+                    report_step_status(true, step_status, action_sinks).await;
                     frequency_instant = Instant::now();                    
                 }
             }
         });
 
-        let t_step_join = thread::spawn(move || { 
-            while let Ok(inner_ctx) = rx_load_step.recv() {
+        let t_step_join = tokio::spawn(async move { 
+            while let Some(inner_ctx) = rx_load_step.recv().await {
                 let step_sinks = step_sinks.clone();
                 let step_status = StepStatus::new(
                     test_case.test_name.to_owned(), 
                     Box::new(inner_ctx));
 
                 if !step_sinks.is_empty() {
-                    report_step_status(false, step_status.to_owned(), step_sinks);
+                    report_step_status(false, step_status.to_owned(), step_sinks).await;
                 }
 
                 arc_stats_by_step
                     .lock()
-                    .unwrap()
+                    .await
                     .push(step_status);
             }
         });
 
-        let t_internal_step_join = thread::spawn(move || { 
-            while let Ok(step_name) = rx_internal_step.recv() {
-
+        let t_internal_step_join = tokio::spawn(async move { 
+            while let Some(step_name) = rx_internal_step.recv().await {
                 let internal_step_sinks = internal_step_sinks.clone();
                 if !internal_step_sinks.is_empty() {
-                    let mut sink_handles = Vec::default();
                     for sink in internal_step_sinks {
                         let cloned_sink = Arc::clone(&sink);
-                        let sink_handle = thread::spawn(move || {
-                            cloned_sink.on_internal_step_ended(step_name);
-                        });
-        
-                        sink_handles.push(sink_handle);
-                    }
-        
-                    for handle in sink_handles {
-                        handle.join().unwrap();
+                        cloned_sink.on_internal_step_ended(step_name).await;
                     }
                 }
             }
         });
 
-        test_case.run(&tx_load_action, &tx_load_step, &tx_internal_step);
+        test_case.run(&tx_load_action, &tx_load_step, &tx_internal_step).await?;
 
         drop(tx_load_action);
         drop(tx_load_step);
         drop(tx_internal_step);
 
-        let join_handles = vec![t_action_join, t_step_join, t_internal_step_join];
+        _ = t_action_join.await;
+        _ = t_step_join.await;
+        _ = t_internal_step_join.await;
 
-        for handle in join_handles {
-            handle.join().unwrap();
+        let by_step: Vec<StepStatus> = stats_by_step.lock().await.clone();
+
+        let test_status = self.report_test_status(&test_case, &by_step).await;
+
+        if let Ok(status) = test_status {
+            // TODO: Properly map error
+            Ok(status)
+        } else {
+            Err("An error happened while reporting the status")
         }
-
-        let by_step: Vec<StepStatus> = stats_by_step.lock().unwrap().clone();
-        let test_status = self.report_test_status(&test_case, &by_step)?;
-        Ok(test_status)
     }
 
     pub fn with_default_reporting_sink(mut self) -> Self {
@@ -174,7 +162,7 @@ impl TestRunner {
         self
     }
    
-    fn report_test_status<T, U>(&self, test_case: &TestCase<T, U>, stats_by_step: &Vec<StepStatus>) -> Result<TestStatus, Error>
+    async fn report_test_status<T, U>(&self, test_case: &TestCase<'a, T, U>, stats_by_step: &Vec<StepStatus>) -> Result<TestStatus, Error>
         where T: TestContext + 'static + Sync + Debug {
 
         let ctx = test_case.test_context.clone().unwrap_or(T::default());
@@ -183,7 +171,7 @@ impl TestRunner {
             test_case.test_name.to_owned(), 
             Box::new(ctx));
 
-        self.write_to_sinks(test_status.to_owned())?;
+        self.write_to_sinks(test_status.to_owned()).await?;
         self.exporter.write_output_files(test_status.to_owned(), stats_by_step.to_owned())?;
 
         if self.use_summary {
@@ -194,28 +182,15 @@ impl TestRunner {
         Ok(test_status)
     }
 
-    fn write_to_sinks(&self, test_status: TestStatus) -> Result<(), Error> {
+    async fn write_to_sinks(&self, test_status: TestStatus) -> Result<(), Error> {
 
         if !self.reporting_sinks.is_empty() {
-
             let arc_test_status = Arc::new(Mutex::new(test_status));
-            let mut sink_handles = Vec::default();
-
             for sink in &self.reporting_sinks {
-
                 let status = Arc::clone(&arc_test_status);
                 let cloned_sink = Arc::clone(sink);
-
-                let sink_handle = thread::spawn(move || {
-                    let t_status = status.lock().unwrap().clone();
-                    cloned_sink.on_test_ended(t_status);
-                });
-
-                sink_handles.push(sink_handle);
-            }
-
-            for handle in sink_handles {
-                handle.join().unwrap();
+                let t_status = status.lock().await.clone();
+                cloned_sink.on_test_ended(t_status).await;
             }
         }
 
