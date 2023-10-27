@@ -116,14 +116,11 @@ impl<'a> TestRunner {
         _ = t_internal_step_join.await;
 
         let by_step: Vec<StepStatus> = stats_by_step.lock().await.clone();
-
         let test_status = self.report_test_status(&test_case, &by_step).await;
 
-        if let Ok(status) = test_status {
-            // TODO: Properly map error
-            Ok(status)
-        } else {
-            Err("An error happened while reporting the status")
+        match test_status {
+            Ok(status) => Ok(status),
+            Err(_) => Err("An error occurred while exporting the test status")
         }
     }
 

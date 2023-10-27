@@ -46,8 +46,7 @@ async fn given_test_with_steps_when_running_test_then_returns_metrics() {
     assert!(actual.is_ok());
 
     let test_status = actual.unwrap();
-    // assert_not_blank_metrics(&test_status.metrics);
-    println!("{:?}", test_status.metrics);
+    assert_not_blank_metrics(&test_status.metrics);
 }
 
 

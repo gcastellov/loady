@@ -37,8 +37,6 @@ impl Scenario {
     fn warmup(ctx: Arc<InnerContext>) -> WarmUpResult<'static> {
         Box::pin(async move {
             sleep(Duration::from_millis(500)).await;
-            println!("warming up");
-    
             if ctx.access_token.is_none() {
                 panic!("Access token wasn't provided");
             }
@@ -54,7 +52,6 @@ impl Scenario {
             let status_code = *codes.choose(&mut rng).unwrap();
     
             sleep(Duration::from_millis(millis)).await;
-            println!("doing actually something");
             
             match status_code {
                 200 => Ok(()),
@@ -66,7 +63,6 @@ impl Scenario {
     fn cleanup(_ctx: InnerContext) -> CleanUpResult<'static> {
         Box::pin(async move {
             sleep(Duration::from_millis(500)).await;
-            println!("cleaning up");
         })
     }    
 }

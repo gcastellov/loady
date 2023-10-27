@@ -1,4 +1,9 @@
 use loady::core::functions::*;
+use tokio::time::sleep;
+use tokio::time::Duration;
+use rand::{Rng,SeedableRng};
+use rand::prelude::SliceRandom;
+use rand::rngs::StdRng;
 use std::sync::Arc;
 
 pub const TEST_NAME: &'static str = "simple sample";
@@ -38,7 +43,16 @@ pub fn warmup(_ctx: Arc<EmptyData>) -> WarmUpResult<'static> {
 #[allow(dead_code)]
 pub fn load(_ctx: Arc<EmptyData>) -> LoadResult<'static> {
     Box::pin(async move {
-        Ok(())
+        let mut rng: StdRng = SeedableRng::from_entropy();
+        let millis = rng.gen_range(25..100);
+        let mut codes = vec![200];
+        codes.extend_from_slice(&[400,401,403,500]);
+        let status_code = *codes.choose(&mut rng).unwrap();
+        sleep(Duration::from_millis(millis)).await;
+        match status_code {
+            200 => Ok(()),
+            _ => Err(status_code)
+        }
     })
 }
 

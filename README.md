@@ -4,11 +4,42 @@
 
 Technology agnostic load testing tool that helps you define your load tests by using the desired communication protocols (HTTP/WebSockets/AMQP etc), libraries and so on.
 
+```rust
+#[tokio::main]
+async fn main() {
+
+    let ctx = InnerContext {
+        client_id: "the client id".to_string(),
+        secret: "the secret".to_string(),
+        access_token: None
+    };
+
+    let test_case = TestCaseBuilder::<InnerContext>
+        ::new("simple sample", "samples", &ctx)
+        .with_init_step(Box::new(Scenario::init))
+        .with_warm_up_step(Box::new(Scenario::warmup))
+            .with_stage("warm up", Duration::from_secs(10), Duration::from_secs(1), 1)
+        .with_load_step("load", Box::new(Scenario::load))    
+            .with_stage("first wave", Duration::from_secs(20), Duration::from_secs(1), 10)
+            .with_stage("second wave", Duration::from_secs(20), Duration::from_secs(1), 10)
+        .with_clean_up_step(Box::new(Scenario::cleanup))
+        .build();
+
+    let runner = TestRunner::new()
+        .with_default_reporting_sink()
+        .with_default_output_files()
+        .with_test_summary_std_out()
+        .with_reporting_frequency(5);
+
+    _ = runner.run(test_case).await;
+}
+```
+
 ## Features
 
 ### Test steps aka test scenarios
 
-As your test can be composed by multiple scenarios, the application allows you to define different steps which will be executed sequentially. Before executing the loading steps where all metrics are extracted, the app, if defined, will execute other steps such as *Init* or *Warm Up*. After the loading steps execute, you can define an extra step to perform certain operation like releasing resources or clean up data. This is accomplished with the *Clean Up* step.
+As your test can be composed by multiple scenarios, the application allows you to define different steps which will be executed sequentially. Before executing the loading steps, where all metrics are extracted, the app will execute other steps, if defined, such as *Init* or *Warm Up*. After the loading steps you can define an extra step to perform certain operation like releasing resources or cleaning up data. This is accomplished with the *Clean Up* step.
 
 |Step||
 |--|--|
