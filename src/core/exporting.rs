@@ -1,4 +1,4 @@
-use std::fmt::{Formatter,Result,Display};
+use std::fmt::{Formatter,Display};
 use num_format::{Locale, ToFormattedString};
 use std::fs::File;
 use std::io::{Write};
@@ -144,7 +144,7 @@ impl Metrics {
 }
 
 impl Display for FileContent<'_> {    
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result { 
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { 
         const STEP_SEPARATOR: &str = "\r\n\r\n----------------------------------------------------------------------\r\n\r\n";
         const NEW_LINE: &str = "\r\n";
 
@@ -253,7 +253,6 @@ impl Exporter {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

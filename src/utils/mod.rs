@@ -1,13 +1,13 @@
-use std::sync::{Arc};
-use std::time::{Duration};
+use tokio::time::{Duration};
 use std::fmt::Debug;
 use std::marker::Sync;
-use crate::core::{TestCase,TestStep,TestStepStage};
+use crate::core::composition::{TestCase,TestStep,TestStepStage};
 use crate::core::context::TestCaseContext;
+use crate::core::functions::*;
 
 pub struct TestCaseBuilder<'a, T> 
     where T: 'static + Default + Clone + Send + Debug + Sync {
-    pub test_case: TestCase<TestCaseContext<'a>, T>
+    pub test_case: TestCase<'a, TestCaseContext<'a>, T>
 }
 
 impl<T> TestCaseBuilder<'static, T> 
@@ -19,25 +19,25 @@ impl<T> TestCaseBuilder<'static, T>
         }
     }
 
-    pub fn with_init_step(mut self, action: fn(T) -> Result<T, i32>) -> Self {
+    pub fn with_init_step(mut self, action: InitFunction<'static, T>) -> Self {
         let step = TestStep::as_init(action);
         self.test_case.with_step(step);
         self
     }
 
-    pub fn with_warm_up_step(mut self, action: fn(&Arc::<T>)) -> Self {
+    pub fn with_warm_up_step(mut self, action: WarmUpFunction<'static, T>) -> Self {
         let step = TestStep::as_warm_up(action, Vec::default());
         self.test_case.with_step(step);
         self
     }
 
-    pub fn with_load_step(mut self, name: &'static str, action: fn(&Arc::<T>) -> Result<(), i32>) -> Self {   
+    pub fn with_load_step(mut self, name: &'static str, action: LoadFunction<'static, T>) -> Self {   
         let step = TestStep::as_load(name, action, Vec::default());
         self.test_case.with_step(step);
         self
     }
 
-    pub fn with_clean_up_step(mut self, action: fn(T)) -> Self {
+    pub fn with_clean_up_step(mut self, action: CleanUpFunction<'static, T>) -> Self {
         let step = TestStep::as_clean_up(action);
         self.test_case.with_step(step);
         self
@@ -48,8 +48,8 @@ impl<T> TestCaseBuilder<'static, T>
         if let Some(step) = self.test_case.test_steps.last_mut() {
             let stage = TestStepStage::new(stage_name, during, interval, rate);
             match step {
-                TestStep::<T>::WarmUp { stages, .. } => stages.push(stage),
-                TestStep::<T>::Load { stages, .. } => stages.push(stage),
+                TestStep::WarmUp { stages, .. } => stages.push(stage),
+                TestStep::Load { stages, .. } => stages.push(stage),
                 _ => panic!("Only 'Warm up' and 'Load' step types can use stages")
             };
         }
@@ -57,7 +57,7 @@ impl<T> TestCaseBuilder<'static, T>
         self
     }
 
-    pub fn build(self) -> TestCase::<TestCaseContext::<'static>, T> {
+    pub fn build(self) -> TestCase::<'static, TestCaseContext::<'static>, T> {
         self.test_case
     }
 }
