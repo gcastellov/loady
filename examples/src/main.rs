@@ -64,7 +64,7 @@ impl Scenario {
         Box::pin(async move {
             sleep(Duration::from_millis(500)).await;
         })
-    }    
+    }
 }
 
 #[tokio::main]
