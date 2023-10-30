@@ -1,0 +1,9 @@
+[package]
+name = "loady-tests-integration"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.32.0", features = [ "rt", "rt-multi-thread", "time", "macros", "sync" ]} 
+rand = "0.8.5"
+loady = { path = "../loady" }

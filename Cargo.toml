@@ -1,15 +1,7 @@
-[package]
-name = "loady"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-tokio = { version = "1.32.0", features = [ "rt", "rt-multi-thread", "time", "macros", "sync" ]} 
-async-trait = "0.1.74"
-num-format = "0.4.4"
-serde = { version = "1.0.183", features = ["derive"] }
-serde_json = "1.0.105"
-rand = "0.8.5"
-uuid = { version = "1.4.1", features = [ "v4" ] }
+[workspace]
+resolver = "2"
+members = [
+  "loady",
+  "examples",
+  "tests-integration"
+]
