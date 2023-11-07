@@ -1,8 +1,8 @@
 use std::fmt::{Formatter,Display};
 use num_format::{Locale, ToFormattedString};
 use std::fs::File;
-use std::io::{Write};
-use serde::{Serialize};
+use std::io::Write;
+use serde::Serialize;
 use crate::core::stats::{TestStatus,StepStatus,Metrics};
 
 #[derive(Eq,PartialEq,Debug)]

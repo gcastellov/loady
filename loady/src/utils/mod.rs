@@ -1,4 +1,4 @@
-use tokio::time::{Duration};
+use tokio::time::Duration;
 use std::fmt::Debug;
 use std::marker::Sync;
 use crate::core::composition::{TestCase,TestStep,TestStepStage};

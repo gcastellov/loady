@@ -2,6 +2,8 @@ use tokio::time::{Instant,Duration};
 use tokio::time::sleep;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use std::cmp::Ordering;
 use std::sync::Arc;
 use std::fmt::Debug;
 use std::marker::Sync;
@@ -17,22 +19,24 @@ pub struct TestCase<'a, T: TestContext, U> {
 }
 
 pub enum TestStep<'a, T> {
-    Init { 
-        action: InitFunction<'a, T>
+    Init {
+        action: Option<InitFunction<'a, T>>
     },
-    WarmUp { 
-        action: WarmUpFunction<'a, T>, 
-        stages: Vec<TestStepStage> 
+    WarmUp {
+        action: Option<WarmUpFunction<'a, T>>,
+        stages: Vec<TestStepStage>
     },
-    Load { 
-        name:  &'static str, 
-        stages: Vec<TestStepStage>, 
-        action: LoadFunction<'a, T>
+    Load {
+        name:  &'static str,
+        stages: Vec<TestStepStage>,
+        action: Option<LoadFunction<'a, T>>
     },
-    CleanUp { 
-        action: CleanUpFunction<'a, T>
+    CleanUp {
+        action: Option<CleanUpFunction<'a, T>>
     }
 }
+
+
 
 pub struct TestStepStage {
     stage_name: &'static str,
@@ -41,10 +45,10 @@ pub struct TestStepStage {
     rate: u32
 }
 
-impl<'a, T, U> TestCase<'a, T, U> 
+impl<'a, T, U> TestCase<'static, T, U>
     where T: TestContext + 'static + Sync + Debug, U: 'static + Clone + Sync + Send {
 
-    pub fn new(test_name: &'static str, test_suite: &'static str, data: U) -> Self {        
+    pub fn new(test_name: &'static str, test_suite: &'static str, data: U) -> Self {
         TestCase::<T, U> {
             test_name,
             test_suite,
@@ -54,8 +58,8 @@ impl<'a, T, U> TestCase<'a, T, U>
         }
     }
 
-    pub fn with_step(&mut self, test_step: TestStep<'a, U>) {
-        
+    pub fn with_step(&mut self, test_step: TestStep<'static, U>) {
+
         match test_step {
             TestStep::Init { .. } => if self.has_init_step() {
                 panic!("Only one Init Step can be used");
@@ -70,82 +74,137 @@ impl<'a, T, U> TestCase<'a, T, U>
         };
 
         self.test_steps.push(test_step);
-    }    
+        self.test_steps.sort_by(|a,b|a.partial_cmp(b).unwrap());
+    }
+
+    async fn execute_init(callback: InitFunction<'static, U>, data: U) -> U {
+        callback(data)
+            .await
+            .expect("Init operation has failed")
+    }
+
+    async fn execute_cleanup(callback: CleanUpFunction<'static, U>, data: U) {
+        callback(data).await
+    }
+
+    async fn execute_warmup(callback: WarmUpFunction<'static, U>, data: U, stages: &Vec<TestStepStage>) {
+
+        let data = Arc::new(data);
+        let callback = Arc::new(callback);
+        let mut handles: Vec<JoinHandle<()>> = Vec::new();
+
+        for test_stage in stages {
+            let stage_start_time = Instant::now();
+            let mut next_period = stage_start_time;
+
+            while stage_start_time.elapsed() <= test_stage.during {
+
+                for _ in 0..test_stage.rate {
+                    let data = Arc::clone(&data);
+                    let callback = Arc::clone(&callback);
+
+                    let handle = tokio::spawn(async move {
+                        (callback)(data).await;
+                    });
+
+                    handles.push(handle);
+                }
+
+                next_period = Self::sleep_for(&stage_start_time, &next_period, &test_stage.interval).await;
+            }
+        }
+
+        for handle in handles {
+            _ = handle.await;
+        }
+    }
+
+    async fn execute_load(
+        callback: LoadFunction<'static, U>, 
+        data: U, test_name: &'static str, 
+        stages: &Vec<TestStepStage>, 
+        ctx: &Arc<Mutex<T>>, 
+        tx_action: &Sender::<T>, start_time: &Instant) {
+        
+        let data = Arc::new(data);        
+        let callback = Arc::new(callback);
+        let mut handles: Vec<JoinHandle<()>> = Vec::new();
+
+        for test_stage in stages {
+            
+            ctx
+                .lock()
+                .await
+                .set_current_step(test_name, test_stage.stage_name);
+
+            let stage_start_time = Instant::now();
+            let mut next_period = stage_start_time;
+
+            while stage_start_time.elapsed() < test_stage.during {
+
+                for _ in 0..test_stage.rate {
+                    let action_transmitter = Sender::clone(tx_action);
+                    let ctx = Arc::clone(&ctx);
+                    let data = Arc::clone(&data);
+                    let callback = Arc::clone(&callback);
+                    let start_time = start_time.to_owned();
+
+                    let handle = tokio::spawn(async move {
+                        let action_start_time = Instant::now();
+                        let action_result = callback(data).await;
+                        let mut mutex = ctx.lock().await;
+                        mutex.add_hit(action_result, action_start_time.elapsed());
+                        mutex.set_current_duration(start_time.elapsed());
+                        _ = action_transmitter.send(mutex.to_owned()).await;
+                    });
+
+                    handles.push(handle);
+                }
+
+                next_period = Self::sleep_for(&stage_start_time, &next_period, &test_stage.interval).await;
+            }
+        }
+
+        for handle in handles {
+            _ = handle.await;
+        }
+    }
 
     pub async fn run(&mut self, tx_action: &Sender::<T>, tx_step: &Sender::<T>, tx_internal_step: &Sender<&str>) -> Result<(), &'static str> {
-        
+
         if !self.has_load_steps() {
             return Err("No load steps have found!");
         }
 
-        let mut owned_data = self.data.clone();
+        let mut data = self.data.clone();
         let ctx = Arc::new(Mutex::new(T::new(self.test_name, self.test_suite)));
-        let steps = self.get_ordered_test_steps();
         let start_time = Instant::now();
-        
-        for (_, test_step) in steps {
+
+        for test_step in &mut self.test_steps {
+
+            let test_name = test_step.get_name();
+
             match test_step {
-                TestStep::Init { action } => {                    
-                    if let Ok(result) = action(self.data.to_owned()).await {
-                        owned_data = result;
-                        _ = tx_internal_step.send(test_step.get_name()).await;
-                    } else {
-                        panic!("Init operation has failed");
-                    }
+                TestStep::Init { action } => {
+                    let action = action.take().unwrap();
+                    data = Self::execute_init(action, data.to_owned()).await;
+                    _ = tx_internal_step.send(test_name).await;
                 },
                 TestStep::WarmUp { action, stages } => {
-                    let data = Arc::new(owned_data.clone());
-
-                    for test_stage in stages { 
-                        let stage_start_time = Instant::now();
-                        while stage_start_time.elapsed() < test_stage.during {
-                            for _ in 0..test_stage.rate {
-                                let t_data = Arc::clone(&data);
-                                let action = action.clone();
-                                action(t_data).await;
-                            }
-
-                            sleep(test_stage.interval).await;
-                        }
-                    }
-
-                    _ = tx_internal_step.send(test_step.get_name()).await;
+                    let action = action.take().unwrap();
+                    Self::execute_warmup(action, data.to_owned(), stages).await;
+                    _ = tx_internal_step.send(test_name).await;
                 },
-                TestStep::Load { name, stages, action } => {
-                    // let mut handles = Vec::default();
-                    let data = Arc::new(owned_data.clone());
-                    for test_stage in stages {
-                        ctx
-                            .lock()
-                            .await
-                            .set_current_step(name, test_stage.stage_name);
-        
-                        let stage_start_time = Instant::now();
-        
-                        while stage_start_time.elapsed() < test_stage.during {
-        
-                            for _ in 0..test_stage.rate {
-                                let action_transmitter = Sender::clone(tx_action);
-                                let t_ctx = Arc::clone(&ctx);
-                                let t_data = Arc::clone(&data);
-                                let action_start_time = Instant::now();                     
-                                let action_result = action(t_data).await;
-                                let mut inner_ctx = t_ctx.lock().await;
-                                inner_ctx.add_hit(action_result, action_start_time.elapsed());
-                                inner_ctx.set_current_duration(start_time.elapsed());
-                                _ = action_transmitter.send(inner_ctx.to_owned()).await;
-                            }
-        
-                            sleep(test_stage.interval).await;
-                        }
-                    }
-
+                TestStep::Load {stages, action, .. } => {
+                    let action = action.take().unwrap();
+                    Self::execute_load(action, data.to_owned(), test_name, stages, &ctx, tx_action, &start_time).await;                   
                     let mut step_ctx = ctx.lock().await;
-                    step_ctx.set_current_duration(start_time.elapsed());                   
+                    step_ctx.set_current_duration(start_time.elapsed());
                     _ = tx_step.send(step_ctx.to_owned()).await;
                 },
                 TestStep::CleanUp { action } => {
-                    action(self.data.to_owned()).await;
+                    let action = action.take().unwrap();
+                    Self::execute_cleanup(action, data.to_owned()).await;
                     _ = tx_internal_step.send(test_step.get_name()).await;
                 }
             };
@@ -157,72 +216,91 @@ impl<'a, T, U> TestCase<'a, T, U>
         Ok(())
     }
 
-    fn get_ordered_test_steps(&self) -> Vec<(usize, &TestStep<'a, U>)> {
-        let mut steps = self.test_steps
-            .iter()
-            .map(|step|(step.get_order(), step))
-            .collect::<Vec<(i32, &TestStep<U>)>>();
-    
-        steps.sort_by(|(a, _), (b, _)|a.cmp(&b));
-        steps.iter().enumerate().map(|(index, (_, step))|(index, *step)).collect()
-    }
-
     fn has_load_steps(&self) -> bool {
-        self.test_steps.iter().find(|step| match step {
+        self.test_steps.iter().any(|step| match step {
             TestStep::Load { stages, .. } => stages.len() > 0,
             _ => false
         })
-        .is_some()
     }
 
     fn has_init_step(&self) -> bool {
-        self.test_steps.iter().find(|step| match step {
+        self.test_steps.iter().any(|step| match step {
             TestStep::Init { .. } => true,
             _ => false
         })
-        .is_some()
     }
 
     fn has_warm_up_step(&self) -> bool {
-        self.test_steps.iter().find(|step| match step {
+        self.test_steps.iter().any(|step| match step {
             TestStep::WarmUp { .. } => true,
             _ => false
         })
-        .is_some()
     }
 
     fn has_clean_up_step(&self) -> bool {
-        self.test_steps.iter().find(|step| match step {
+        self.test_steps.iter().any(|step| match step {
             TestStep::CleanUp { .. } => true,
             _ => false
         })
-        .is_some()
+    }
+
+    async fn sleep_for(stage_start_time: &Instant, next_period: &Instant, interval: &Duration) -> Instant {
+        let next_period = next_period.checked_add(*interval).unwrap_or(*stage_start_time);
+        if let Some(time) = next_period.checked_duration_since(Instant::now()) {
+            sleep(time).await;
+        }
+
+        next_period
+    }
+}
+
+impl<'a, T> PartialEq for TestStep<'a, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_order() == other.get_order()
+    }
+}
+
+impl<'a, T> PartialOrd for TestStep<'a, T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        
+        let current_order= self.get_order();
+        let other_order = other.get_order();
+        
+        if current_order > other_order {
+            Some(Ordering::Greater)
+        } else if current_order < other_order {
+            Some(Ordering::Less)
+        } else if current_order == other_order {
+            Some(Ordering::Equal)
+        } else {
+            None
+        }
     }
 }
 
 impl<'a, T> TestStep<'a, T> {
     pub fn as_init(action: InitFunction<'a, T>) -> Self {
-        Self::Init { action }
+        Self::Init { action: Some(action) }
     }
 
     pub fn as_warm_up(action: WarmUpFunction<'a, T>, stages: Vec<TestStepStage>) -> Self {
-        Self::WarmUp { action, stages }
+        Self::WarmUp { action: Some(action), stages }
     }
 
     pub fn as_load(name: &'static str, action: LoadFunction<'a, T>, stages: Vec<TestStepStage>) -> Self {
-        Self::Load { name, action, stages }
+        Self::Load { name, action: Some(action), stages }
     }
 
     pub fn as_clean_up(action: CleanUpFunction<'a, T>) -> Self {
-        Self::CleanUp { action }
+        Self::CleanUp { action: Some(action) }
     }
 
-    fn get_order(&self) -> i32 {
+    fn get_order(&self) -> usize {
         match self {
-            TestStep::Init { .. } => 1,
-            TestStep::WarmUp { .. } => 2,
-            TestStep::Load { .. } => 3,
-            TestStep::CleanUp { .. } => 4
+            TestStep::Init { .. } => 0,
+            TestStep::WarmUp { .. } => 1,
+            TestStep::Load { .. } => 2,
+            TestStep::CleanUp { .. } => 3
         }
     }
 
@@ -260,18 +338,18 @@ mod tests {
             Ok(ctx.to_owned())
         })
     }
-    
+
     fn warmup(_ctx: Arc<EmptyData>) -> WarmUpResult<'static> {
-        Box::pin(async move {            
+        Box::pin(async move {
         })
     }
-    
+
     fn load(_ctx: Arc<EmptyData>) -> LoadResult<'static> {
         Box::pin(async move {
             Ok(())
         })
     }
-    
+
     fn cleanup(_ctx: EmptyData) -> CleanUpResult<'static> {
         Box::pin(async move {
         })
@@ -314,7 +392,7 @@ mod tests {
         const SECOND_LOAD_STEP: &str = "second";
         const THIRD_LOAD_STEP: &str = "third";
 
-        let mut test_case = TestCase::<'static, TestCaseContext, EmptyData>::new(TEST_NAME, TEST_SUITE, EmptyData::default()); 
+        let mut test_case = TestCase::<'static, TestCaseContext, EmptyData>::new(TEST_NAME, TEST_SUITE, EmptyData::default());
         let init_step = TestStep::<'static, EmptyData>::as_init(Box::new(init));
         let clean_up_step = TestStep::<'static, EmptyData>::as_clean_up(Box::new(cleanup));
         let warm_up_step = TestStep::<'static, EmptyData>::as_warm_up(Box::new(warmup), Vec::default());
@@ -329,13 +407,13 @@ mod tests {
         test_case.with_step(second_load_step);
         test_case.with_step(third_load_step);
 
-        let actual = test_case.get_ordered_test_steps();
+        let actual = &test_case.test_steps;
 
         assert_eq!(test_case.test_steps.len(), 6);
         assert_eq!(actual.len(), test_case.test_steps.len());
 
         for i in 0..actual.len() {
-            let (index, step) = actual.get(i).unwrap();
+            let step = actual.get(i).unwrap();
 
             let expected_index = match step {
                 TestStep::Init { .. } => 0,
@@ -349,31 +427,31 @@ mod tests {
                 TestStep::CleanUp { .. } => 5
             };
 
-            assert_eq!(*index, expected_index);
+            assert_eq!(i, expected_index);
         }
     }
 
     #[test]
     fn when_creating_new_step_as_init_then_returns_expected_type() {
         let step = TestStep::<'static, EmptyData>::as_init(Box::new(init));
-        assert!(matches!(step, TestStep::Init { .. }));    
+        assert!(matches!(step, TestStep::Init { .. }));
     }
 
     #[test]
     fn when_creating_new_step_as_warm_up_then_returns_expected_type() {
         let step = TestStep::<'static, EmptyData>::as_warm_up(Box::new(warmup), Vec::default());
-        assert!(matches!(step, TestStep::WarmUp { .. }));    
+        assert!(matches!(step, TestStep::WarmUp { .. }));
     }
 
     #[test]
     fn when_creating_new_step_as_load_then_returns_expected_type() {
         let step = TestStep::<'static, EmptyData>::as_load("step", Box::new(load), Vec::default());
-        assert!(matches!(step, TestStep::Load { .. }));    
+        assert!(matches!(step, TestStep::Load { .. }));
     }
 
     #[test]
     fn when_creating_new_step_as_clean_up_then_returns_expected_type() {
         let step = TestStep::<'static, EmptyData>::as_clean_up(Box::new(cleanup));
-        assert!(matches!(step, TestStep::CleanUp { .. }));    
+        assert!(matches!(step, TestStep::CleanUp { .. }));
     }
 }

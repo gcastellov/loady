@@ -3,13 +3,13 @@ use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use std::fmt::Debug;
 use std::marker::Sync;
-use std::io::{Error};
+use std::io::Error;
 use std::sync::Arc;
 use crate::core::reporting::{ReportingSink,DefaultReportingSink};
 use crate::core::exporting::{Exporter,FileType};
 use crate::core::stats::{TestStatus,StepStatus};
 use crate::core::context::TestContext;
-use crate::core::composition::{TestCase};
+use crate::core::composition::TestCase;
 
 pub struct TestRunner {
     reporting_sinks: Vec<Arc<Box<dyn ReportingSink>>>,
@@ -31,7 +31,7 @@ impl<'a> TestRunner {
         }
     }
   
-    pub async fn run<T, U>(&self, mut test_case: TestCase<'a, T, U>) -> Result<TestStatus, &str>
+    pub async fn run<T, U>(&self, mut test_case: TestCase<'static, T, U>) -> Result<TestStatus, &str>
         where T: TestContext + 'static + Sync + Debug, U: 'static + Clone + Sync + Send {
 
         let report_step_status = |is_action: bool, step_status: StepStatus, sinks: Vec<Arc<Box<dyn ReportingSink>>>| async move {
