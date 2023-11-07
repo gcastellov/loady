@@ -8,9 +8,11 @@ Technology agnostic load testing tool that helps you define your load tests by u
 #[tokio::main]
 async fn main() {
 
-    let ctx = InnerContext {
-        client_id: "the client id".to_string(),
-        secret: "the secret".to_string(),
+let ctx = InnerContext {
+        warmup_url: "http://localhost:8080",
+        load_url: "http://localhost:8080/hey",
+        client_id: "the client id",
+        secret: "the secret",
         access_token: None
     };
 
@@ -18,10 +20,11 @@ async fn main() {
         ::new("simple sample", "samples", &ctx)
         .with_init_step(Box::new(Scenario::init))
         .with_warm_up_step(Box::new(Scenario::warmup))
-            .with_stage("warm up", Duration::from_secs(10), Duration::from_secs(1), 1)
+            .with_stage("warm up", Duration::from_secs(10), Duration::from_secs(1), 2)
         .with_load_step("load", Box::new(Scenario::load))    
-            .with_stage("first wave", Duration::from_secs(20), Duration::from_secs(1), 10)
-            .with_stage("second wave", Duration::from_secs(20), Duration::from_secs(1), 10)
+            .with_stage("first wave", Duration::from_secs(10), Duration::from_secs(1), 15)
+            .with_stage("second wave", Duration::from_secs(30), Duration::from_secs(1), 50)
+            .with_stage("third wave", Duration::from_secs(10), Duration::from_secs(1), 15)
         .with_clean_up_step(Box::new(Scenario::cleanup))
         .build();
 
