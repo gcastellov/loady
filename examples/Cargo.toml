@@ -1,6 +1,6 @@
 [package]
 name = "loady-examples"
-version = "0.1.0"
+version = "1.1.0"
 edition = "2021"
 
 [[bin]]
@@ -11,8 +11,13 @@ path = "src/bin/http.rs"
 name = "dummy"
 path = "src/bin/dummy.rs"
 
+[[bin]]
+name = "elastic-sink"
+path = "src/bin/elastic_sink.rs"
+
 [dependencies]
 tokio = { version = "1.32.0", features = [ "rt", "rt-multi-thread", "time", "macros", "sync" ]} 
-reqwest = { version = "0.11.22" } 
+reqwest = { version = "0.11.22" }
 rand = "0.8.5"
 loady = { path = "../loady" }
+loady-sinks = { path = "../loady-sinks" }

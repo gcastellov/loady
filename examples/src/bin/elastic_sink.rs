@@ -1,6 +1,7 @@
 use loady::core::functions::*;
 use loady::core::runner::TestRunner;
 use loady::utils::TestCaseBuilder;
+use loady_sinks::ElasticSyncBuilder;
 use rand::prelude::SliceRandom;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -39,20 +40,36 @@ async fn main() {
         .with_load_step("load", Box::new(Scenario::load))
         .with_stage(
             "first wave",
-            Duration::from_secs(20),
+            Duration::from_secs(15),
+            Duration::from_secs(2),
+            5,
+        )
+        .with_stage(
+            "second wave",
+            Duration::from_secs(30),
             Duration::from_secs(1),
             10,
         )
         .with_stage(
-            "second wave",
-            Duration::from_secs(20),
-            Duration::from_secs(1),
-            10,
+            "third wave",
+            Duration::from_secs(30),
+            Duration::from_secs(2),
+            5,
+        )
+        .with_stage(
+            "forth wave",
+            Duration::from_secs(15),
+            Duration::from_secs(2),
+            2,
         )
         .build();
 
+    let elastic_sink = ElasticSyncBuilder::default()
+        .with_using_url("http://localhost:9200")
+        .build();
+
     let runner = TestRunner::default()
-        .with_default_output_files()
+        .with_reporting_sink(elastic_sink)
         .with_test_summary_std_out();
 
     _ = runner.run(test_case).await;
