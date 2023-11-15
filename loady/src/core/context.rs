@@ -1,14 +1,15 @@
+use std::collections::{BTreeSet, HashMap};
 use tokio::time::Duration;
-use std::collections::{HashMap,BTreeSet};
 use uuid::Uuid;
 
-pub trait TestContext : Default + Clone + Send {
+pub trait TestContext: Default + Clone + Send {
     fn new(test_name: &'static str, test_suite: &'static str) -> Self;
     fn add_hit(&mut self, result: Result<(), i32>, duration: Duration);
     fn get_hits(&self) -> u128;
     fn get_successful_hits(&self) -> u128;
     fn get_unsuccessful_hits(&self) -> u128;
     fn get_session_id(&self) -> String;
+    fn get_test_name(&self) -> String;
     fn get_current_duration(&self) -> Duration;
     fn get_current_step_name(&self) -> String;
     fn get_current_mean_time(&self) -> u128;
@@ -18,30 +19,29 @@ pub trait TestContext : Default + Clone + Send {
     fn get_current_std_dev(&self) -> u128;
     fn get_current_errors(&self) -> HashMap<i32, u128>;
     fn set_current_step(&mut self, step_name: &'static str, stage_name: &'static str);
-    fn set_current_duration(&mut self, duration: Duration);    
+    fn set_current_duration(&mut self, duration: Duration);
 }
 
-#[derive(Default,Clone,Debug)]
+#[derive(Default, Clone, Debug)]
 pub struct TestCaseContext<'a> {
     pub session_id: Uuid,
     pub test_name: &'a str,
     pub test_suite: &'a str,
     pub test_step_name: Option<&'a str>,
     pub test_stage_name: Option<&'a str>,
-    test_metrics: TestContextMetrics
+    test_metrics: TestContextMetrics,
 }
 
-#[derive(Default,Clone,Debug)]
+#[derive(Default, Clone, Debug)]
 struct TestContextMetrics {
     successful_hits: u128,
     unsuccessful_hits: u128,
     test_duration: Duration,
     elapsed_times: BTreeSet<u128>,
-    errors: HashMap<i32, u128>
+    errors: HashMap<i32, u128>,
 }
 
 impl<'a> TestContext for TestCaseContext<'a> {
-
     fn new(test_name: &'static str, test_suite: &'static str) -> Self {
         TestCaseContext {
             session_id: Uuid::new_v4(),
@@ -49,7 +49,7 @@ impl<'a> TestContext for TestCaseContext<'a> {
             test_suite,
             test_step_name: None,
             test_stage_name: None,
-            test_metrics: TestContextMetrics::default()
+            test_metrics: TestContextMetrics::default(),
         }
     }
 
@@ -58,9 +58,8 @@ impl<'a> TestContext for TestCaseContext<'a> {
     }
 
     fn add_hit(&mut self, result: Result<(), i32>, duration: Duration) {
-        
         if let Err(code) = result {
-            self.test_metrics.unsuccessful_hits +=1;
+            self.test_metrics.unsuccessful_hits += 1;
             *self.test_metrics.errors.entry(code).or_insert(0) += 1;
         } else {
             self.test_metrics.successful_hits += 1;
@@ -73,9 +72,13 @@ impl<'a> TestContext for TestCaseContext<'a> {
         self.session_id.to_string()
     }
 
+    fn get_test_name(&self) -> String {
+        self.test_name.to_owned()
+    }
+
     fn set_current_step(&mut self, step_name: &'static str, stage_name: &'static str) {
-        self.test_step_name = Some(step_name.clone());
-        self.test_stage_name = Some(stage_name.clone());
+        self.test_step_name = Some(step_name);
+        self.test_stage_name = Some(stage_name);
     }
 
     fn set_current_duration(&mut self, duration: Duration) {
@@ -100,7 +103,8 @@ impl<'a> TestContext for TestCaseContext<'a> {
 
     fn get_current_mean_time(&self) -> u128 {
         let sum = self.test_metrics.elapsed_times.iter().sum::<u128>();
-        sum.checked_div(self.test_metrics.elapsed_times.len() as u128).unwrap_or(0)
+        sum.checked_div(self.test_metrics.elapsed_times.len() as u128)
+            .unwrap_or(0)
     }
 
     fn get_current_max_time(&self) -> u128 {
@@ -112,37 +116,51 @@ impl<'a> TestContext for TestCaseContext<'a> {
     }
 
     fn get_current_percentile_time(&self, percentile: f64) -> u128 {
-
         let calc_percentile = |value: usize| -> u128 {
             let index = value as f64 * percentile;
             let lower_index = index.floor() as usize;
             let upper_index = index.ceil() as usize;
-            
-            let lowest_value = *self.test_metrics.elapsed_times.iter().nth(lower_index).unwrap_or(&0);
-            let highest_value = *self.test_metrics.elapsed_times.iter().nth(upper_index).unwrap_or(&0);
-    
-            let interpolated_value = lowest_value as f64 + (index - lower_index as f64) * (highest_value - lowest_value) as f64;
+
+            let lowest_value = *self
+                .test_metrics
+                .elapsed_times
+                .iter()
+                .nth(lower_index)
+                .unwrap_or(&0);
+            let highest_value = *self
+                .test_metrics
+                .elapsed_times
+                .iter()
+                .nth(upper_index)
+                .unwrap_or(&0);
+
+            let interpolated_value = lowest_value as f64
+                + (index - lower_index as f64) * (highest_value - lowest_value) as f64;
             interpolated_value as u128
         };
 
         match self.test_metrics.elapsed_times.len().checked_sub(1) {
             Some(value) => calc_percentile(value),
-            _ => 0
+            _ => 0,
         }
     }
 
     fn get_current_std_dev(&self) -> u128 {
         let mean_time = self.get_current_mean_time() as i128;
-        let sum = self.test_metrics.elapsed_times
+        let sum = self
+            .test_metrics
+            .elapsed_times
             .iter()
-            .map(|time|(*time as i128 - mean_time).pow(2))
+            .map(|time| (*time as i128 - mean_time).pow(2))
             .sum::<i128>();
 
-        let div = sum.checked_div(self.test_metrics.elapsed_times.len() as i128).unwrap_or(0) as f64;
+        let div = sum
+            .checked_div(self.test_metrics.elapsed_times.len() as i128)
+            .unwrap_or(0) as f64;
         f64::sqrt(div).round() as u128
     }
 
-    fn get_current_errors(&self) -> HashMap<i32, u128> {        
+    fn get_current_errors(&self) -> HashMap<i32, u128> {
         self.test_metrics.errors.clone()
     }
 }
@@ -154,12 +172,12 @@ mod tests {
 
     fn seed_with_hits(ctx: &mut impl TestContext) {
         let hits = vec![
-            (Ok(()), Duration::from_millis(100)), 
-            (Ok(()), Duration::from_millis(130)), 
-            (Ok(()), Duration::from_millis(80)), 
+            (Ok(()), Duration::from_millis(100)),
+            (Ok(()), Duration::from_millis(130)),
+            (Ok(()), Duration::from_millis(80)),
             (Err(401), Duration::from_millis(200)),
             (Err(402), Duration::from_millis(300)),
-            (Ok(()), Duration::from_millis(150)), 
+            (Ok(()), Duration::from_millis(150)),
         ];
 
         for (result, duration) in hits {
@@ -174,7 +192,7 @@ mod tests {
         assert!(!ctx.get_session_id().is_empty());
         assert_eq!(ctx.get_current_step_name(), String::from(""));
         assert_eq!(ctx.get_current_duration(), Duration::default());
-        assert_eq!(ctx.get_current_errors(), HashMap::default());        
+        assert_eq!(ctx.get_current_errors(), HashMap::default());
         assert_eq!(ctx.get_current_min_time(), 0);
         assert_eq!(ctx.get_current_mean_time(), 0);
         assert_eq!(ctx.get_current_max_time(), 0);
@@ -271,7 +289,7 @@ mod tests {
     #[test]
     fn given_step_name_when_getting_current_step_name_then_returns_expected_value() {
         const STEP_NAME: &str = "STEP NAME";
-        const STAGE_NAME: &str  = "STAGE NAME";        
+        const STAGE_NAME: &str = "STAGE NAME";
         let mut ctx = TestCaseContext::default();
         ctx.set_current_step(STEP_NAME, STAGE_NAME);
 
@@ -281,13 +299,13 @@ mod tests {
     }
 
     #[test]
-    fn given_test_duration_when_getting_current_duration_then_returns_expected_value() {        
+    fn given_test_duration_when_getting_current_duration_then_returns_expected_value() {
         let duration = Duration::from_secs(2);
         let mut ctx = TestCaseContext::default();
         ctx.set_current_duration(duration);
 
         let actual = ctx.get_current_duration();
-        
+
         assert_eq!(actual, duration);
     }
 }

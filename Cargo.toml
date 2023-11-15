@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "loady",
+  "loady-sinks",
   "examples",
   "tests-integration"
 ]

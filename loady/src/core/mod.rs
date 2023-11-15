@@ -1,7 +1,7 @@
-pub mod context;
-pub mod stats;
-pub mod reporting;
-pub mod exporting;
-pub mod runner;
-pub mod functions;
 pub mod composition;
+pub mod context;
+pub mod exporting;
+pub mod functions;
+pub mod reporting;
+pub mod runner;
+pub mod stats;
