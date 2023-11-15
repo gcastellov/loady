@@ -84,8 +84,6 @@ impl ElasticSink {
 
 #[async_trait]
 impl ReportingSink for ElasticSink {
-    async fn on_test_initialized(&self, _: String) {}
-
     async fn on_test_ended(&self, _: TestStatus) {}
 
     async fn on_load_step_ended(&self, step_status: StepStatus) {

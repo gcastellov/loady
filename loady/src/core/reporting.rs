@@ -20,7 +20,6 @@ pub struct DefaultReportingSink;
 
 #[async_trait]
 pub trait ReportingSink: Sync + Send {
-    async fn on_test_initialized(&self, session_id: String);
     async fn on_test_ended(&self, status: TestStatus);
     async fn on_load_step_ended(&self, status: StepStatus);
     async fn on_load_action_ended(&self, step_status: StepStatus);
@@ -29,10 +28,6 @@ pub trait ReportingSink: Sync + Send {
 
 #[async_trait]
 impl ReportingSink for DefaultReportingSink {
-    async fn on_test_initialized(&self, session_id: String) {
-        println!("Test {:} has been initialized", session_id);
-    }
-
     async fn on_test_ended(&self, test_status: TestStatus) {
         println!("Test has ended: {:?}", test_status);
     }
@@ -136,15 +131,9 @@ impl Reporter {
         let t_internal_step_join = tokio::spawn(async move {
             while let Some(inner_ctx) = receiver.recv().await {
                 let step_name = &inner_ctx.get_current_step_name();
-                let session_id = inner_ctx.get_session_id();
                 if !sinks.is_empty() {
                     for sink in sinks.as_ref() {
                         let sink = Arc::clone(sink);
-
-                        if step_name == "Init" {
-                            sink.on_test_initialized(session_id.to_owned()).await;
-                        }
-
                         sink.on_internal_step_ended(step_name).await;
                     }
                 }
