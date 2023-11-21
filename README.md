@@ -65,6 +65,12 @@ The *ReportingSink* trait has three hooks for reporting metrics:
 |**on_load_action_ended**|It triggers on a time basis once a load action ends.|
 |**on_internal_step_ended**|It triggers once a *Init*, *Warm Up* or *Clean Up* step ends.|
 
+#### Supported sinks
+|Sink|Db|Crate|
+|--|--|--|
+|ElasticSink|ElasticSearch|[![crates.io](https://img.shields.io/crates/v/elasticsearch.svg)](https://crates.io/crates/elasticsearch)|
+|InfluxDbSink|InfluxDb|[![crates.io](https://img.shields.io/crates/v/influxdb.svg)](https://crates.io/crates/influxdb)|
+
 ### Metrics
 The runner extracts metrics of the test execution during different intants of the execution. 
 
