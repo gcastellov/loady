@@ -10,8 +10,8 @@ async fn main() {
     let influxdb_sink = InfluxDbSinkBuilder::default()
         .with_using_url("http://localhost:8086")
         .with_credentials("influx", "influxdb")
-        .with_db_name("db0")
-        .with_timeseries_name("step-metics")
+        .with_db_name("loady")
+        .with_timeseries_names("metrics", "errors")
         .build();
 
     let runner = TestRunner::default()
