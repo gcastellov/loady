@@ -94,6 +94,7 @@ where
         let mut data = self.data.clone();
         let ctx = Arc::new(Mutex::new(T::new(self.test_name, self.test_suite)));
         let start_time = Instant::now();
+        let mut load_start_time: Option<Instant> = None;
 
         for test_step in &mut self.test_steps {
             let test_name = test_step.get_name();
@@ -112,6 +113,7 @@ where
                     _ = tx_internal_step.send(step_ctx.to_owned()).await;
                 }
                 TestStep::Load { stages, action, .. } => {
+                    let load_start_time = load_start_time.get_or_insert(Instant::now());
                     let action = action.take().unwrap();
                     Self::execute_load(
                         action,
@@ -121,6 +123,7 @@ where
                         &ctx,
                         tx_action,
                         &start_time,
+                        &load_start_time,
                     )
                     .await;
                     let mut step_ctx = ctx.lock().await;
@@ -193,6 +196,7 @@ where
         ctx: &Arc<Mutex<T>>,
         tx_action: &Sender<T>,
         start_time: &Instant,
+        load_start_time: &Instant,
     ) {
         let data = Arc::new(data);
         let callback = Arc::new(callback);
@@ -213,12 +217,14 @@ where
                     let data = Arc::clone(&data);
                     let callback = Arc::clone(&callback);
                     let start_time = start_time.to_owned();
+                    let load_start_time = load_start_time.to_owned();
 
                     let handle = tokio::spawn(async move {
                         let action_start_time = Instant::now();
                         let action_result = callback(data).await;
                         let mut mutex = ctx.lock().await;
                         mutex.add_hit(action_result, action_start_time.elapsed());
+                        mutex.set_current_load_duration(load_start_time.elapsed());
                         mutex.set_current_duration(start_time.elapsed());
                         _ = action_transmitter.send(mutex.to_owned()).await;
                     });

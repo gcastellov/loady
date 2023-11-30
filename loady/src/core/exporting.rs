@@ -87,9 +87,11 @@ impl StepStatus {
 
 impl Metrics {
     fn as_txt(&self, locale: &Localization) -> String {
-        let mut content = format!("{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n\r\n{: <20}: {:}\r\n{: <20}: {:}\r\n{: <20}: {:}", 
+        let mut content = format!("{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n\r\n{: <20}: {:}\r\n{: <20}: {:}\r\n{: <20}: {:}", 
             "Test Duration",
             locale.format_duration(&self.test_duration),
+            "Load Duration",
+            locale.format_duration(&self.load_duration),
             "Min Time",
             locale.format_duration(&self.min_time),
             "Mean Time", 
@@ -124,8 +126,9 @@ impl Metrics {
 
     fn as_csv(&self, locale: &Localization) -> String {
         let mut content = format!(
-            "{:};{:};{:};{:};{:};{:};{:};{:};{:};{:};{:}",
+            "{:};{:};{:};{:};{:};{:};{:};{:};{:};{:};{:};{:}",
             locale.format_duration(&self.test_duration),
+            locale.format_duration(&self.load_duration),
             locale.format_duration(&self.min_time),
             locale.format_duration(&self.mean_time),
             locale.format_duration(&self.max_time),

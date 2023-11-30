@@ -5,6 +5,7 @@ use std::collections::HashMap;
 #[derive(Clone, Debug, Serialize)]
 pub struct Metrics {
     pub test_duration: u128,
+    pub load_duration: u128,
     pub mean_time: u128,
     pub max_time: u128,
     pub min_time: u128,
@@ -62,6 +63,7 @@ impl Metrics {
     fn new(test_context: impl TestContext) -> Self {
         Metrics {
             test_duration: test_context.get_current_duration().as_millis(),
+            load_duration: test_context.get_current_load_duration().as_millis(),
             positive_hits: test_context.get_successful_hits(),
             negative_hits: test_context.get_unsuccessful_hits(),
             all_hits: test_context.get_successful_hits() + test_context.get_unsuccessful_hits(),

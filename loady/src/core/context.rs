@@ -11,6 +11,7 @@ pub trait TestContext: Default + Clone + Send {
     fn get_session_id(&self) -> String;
     fn get_test_name(&self) -> String;
     fn get_current_duration(&self) -> Duration;
+    fn get_current_load_duration(&self) -> Duration;
     fn get_current_step_name(&self) -> String;
     fn get_current_mean_time(&self) -> u128;
     fn get_current_min_time(&self) -> u128;
@@ -20,6 +21,7 @@ pub trait TestContext: Default + Clone + Send {
     fn get_current_errors(&self) -> HashMap<i32, u128>;
     fn set_current_step(&mut self, step_name: &'static str, stage_name: &'static str);
     fn set_current_duration(&mut self, duration: Duration);
+    fn set_current_load_duration(&mut self, duration: Duration);
 }
 
 #[derive(Default, Clone, Debug)]
@@ -37,6 +39,7 @@ struct TestContextMetrics {
     successful_hits: u128,
     unsuccessful_hits: u128,
     test_duration: Duration,
+    load_duration: Duration,
     elapsed_times: BTreeSet<u128>,
     errors: HashMap<i32, u128>,
 }
@@ -85,6 +88,10 @@ impl<'a> TestContext for TestCaseContext<'a> {
         self.test_metrics.test_duration = duration;
     }
 
+    fn set_current_load_duration(&mut self, duration: Duration) {
+        self.test_metrics.load_duration = duration;
+    }
+
     fn get_successful_hits(&self) -> u128 {
         self.test_metrics.successful_hits
     }
@@ -95,6 +102,10 @@ impl<'a> TestContext for TestCaseContext<'a> {
 
     fn get_current_duration(&self) -> Duration {
         self.test_metrics.test_duration
+    }
+
+    fn get_current_load_duration(&self) -> Duration {
+        self.test_metrics.load_duration
     }
 
     fn get_current_step_name(&self) -> String {
