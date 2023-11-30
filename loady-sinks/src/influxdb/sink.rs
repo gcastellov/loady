@@ -18,7 +18,7 @@ pub struct InfluxDbSink {
 #[derive(InfluxDbWriteable)]
 struct Metric {
     time: DateTime<Utc>,
-    mesurement: i64,
+    mesurement: f64,
     #[influxdb(tag)]
     description: String,
     #[influxdb(tag)]
@@ -49,7 +49,7 @@ impl Metric {
             step_name: step_name.to_owned(),
             test_name: test_name.to_owned(),
             description: description.to_owned(),
-            mesurement: mesurement as i64,
+            mesurement: mesurement as f64,
         }
     }
 }
@@ -157,6 +157,14 @@ impl MeticConverter for StepStatus {
                 "all_hits",
                 self.metrics.all_hits,
             ),
+            Metric {
+                time: created_at,
+                session_id: session_id.to_owned(),
+                step_name: step_name.to_owned(),
+                test_name: test_name.to_owned(),
+                description: "request_per_sec".to_string(),
+                mesurement: self.metrics.request_per_sec,
+            },
         ];
 
         metrics
