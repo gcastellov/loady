@@ -93,39 +93,41 @@ where
 
         let mut data = self.data.clone();
         let ctx = Arc::new(Mutex::new(T::new(self.test_name, self.test_suite)));
-        let start_time = Instant::now();
+        let mut load_start_time: Option<Instant> = None;
 
         for test_step in &mut self.test_steps {
-            let test_name = test_step.get_name();
+            {
+                let mut ctx = ctx.lock().await;
+                ctx.set_current_step(test_step.get_name());
+            }
 
             match test_step {
                 TestStep::Init { action } => {
                     let action = action.take().unwrap();
                     data = Self::execute_init(action, data.to_owned()).await;
-                    let step_ctx = ctx.lock().await;
-                    _ = tx_internal_step.send(step_ctx.to_owned()).await;
+                    let ctx = ctx.lock().await;
+                    _ = tx_internal_step.send(ctx.to_owned()).await;
                 }
                 TestStep::WarmUp { action, stages } => {
                     let action = action.take().unwrap();
                     Self::execute_warmup(action, data.to_owned(), stages).await;
-                    let step_ctx = ctx.lock().await;
-                    _ = tx_internal_step.send(step_ctx.to_owned()).await;
+                    let ctx = ctx.lock().await;
+                    _ = tx_internal_step.send(ctx.to_owned()).await;
                 }
                 TestStep::Load { stages, action, .. } => {
+                    let load_start_time = load_start_time.get_or_insert(Instant::now());
                     let action = action.take().unwrap();
                     Self::execute_load(
                         action,
                         data.to_owned(),
-                        test_name,
                         stages,
                         &ctx,
                         tx_action,
-                        &start_time,
+                        load_start_time.to_owned(),
                     )
                     .await;
-                    let mut step_ctx = ctx.lock().await;
-                    step_ctx.set_current_duration(start_time.elapsed());
-                    _ = tx_step.send(step_ctx.to_owned()).await;
+                    let ctx = ctx.lock().await;
+                    _ = tx_step.send(ctx.to_owned()).await;
                 }
                 TestStep::CleanUp { action } => {
                     let action = action.take().unwrap();
@@ -136,9 +138,8 @@ where
             };
         }
 
-        let mut context = ctx.lock().await;
-        context.set_current_duration(start_time.elapsed());
-        self.test_context = Some(context.to_owned());
+        let ctx = ctx.lock().await;
+        self.test_context = Some(ctx.to_owned());
         Ok(())
     }
 
@@ -188,20 +189,17 @@ where
     async fn execute_load(
         callback: LoadFunction<'static, U>,
         data: U,
-        test_name: &'static str,
         stages: &Vec<TestStepStage>,
         ctx: &Arc<Mutex<T>>,
         tx_action: &Sender<T>,
-        start_time: &Instant,
+        load_start_time: Instant,
     ) {
         let data = Arc::new(data);
         let callback = Arc::new(callback);
         let mut handles: Vec<JoinHandle<()>> = Vec::new();
 
         for test_stage in stages {
-            ctx.lock()
-                .await
-                .set_current_step(test_name, test_stage.stage_name);
+            ctx.lock().await.set_current_stage(test_stage.stage_name);
 
             let stage_start_time = Instant::now();
             let mut next_period = stage_start_time;
@@ -212,15 +210,14 @@ where
                     let ctx = Arc::clone(ctx);
                     let data = Arc::clone(&data);
                     let callback = Arc::clone(&callback);
-                    let start_time = start_time.to_owned();
 
                     let handle = tokio::spawn(async move {
                         let action_start_time = Instant::now();
                         let action_result = callback(data).await;
-                        let mut mutex = ctx.lock().await;
-                        mutex.add_hit(action_result, action_start_time.elapsed());
-                        mutex.set_current_duration(start_time.elapsed());
-                        _ = action_transmitter.send(mutex.to_owned()).await;
+                        let mut ctx = ctx.lock().await;
+                        ctx.add_hit(action_result, action_start_time.elapsed());
+                        ctx.set_current_load_duration(load_start_time.elapsed());
+                        _ = action_transmitter.send(ctx.to_owned()).await;
                     });
 
                     handles.push(handle);

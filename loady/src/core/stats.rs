@@ -5,6 +5,7 @@ use std::collections::HashMap;
 #[derive(Clone, Debug, Serialize)]
 pub struct Metrics {
     pub test_duration: u128,
+    pub load_duration: u128,
     pub mean_time: u128,
     pub max_time: u128,
     pub min_time: u128,
@@ -15,6 +16,7 @@ pub struct Metrics {
     pub positive_hits: u128,
     pub negative_hits: u128,
     pub all_hits: u128,
+    pub request_per_sec: f64,
     pub errors: HashMap<i32, u128>,
 }
 
@@ -60,11 +62,13 @@ impl Metrics {
     const P99: f64 = 0.99;
 
     fn new(test_context: impl TestContext) -> Self {
-        Metrics {
+        let mut metrics = Metrics {
+            all_hits: 0u128,
+            request_per_sec: 0_f64,
             test_duration: test_context.get_current_duration().as_millis(),
+            load_duration: test_context.get_current_load_duration().as_millis(),
             positive_hits: test_context.get_successful_hits(),
             negative_hits: test_context.get_unsuccessful_hits(),
-            all_hits: test_context.get_successful_hits() + test_context.get_unsuccessful_hits(),
             min_time: test_context.get_current_min_time(),
             max_time: test_context.get_current_max_time(),
             mean_time: test_context.get_current_mean_time(),
@@ -73,6 +77,16 @@ impl Metrics {
             p95_time: test_context.get_current_percentile_time(Self::P95),
             p99_time: test_context.get_current_percentile_time(Self::P99),
             errors: test_context.get_current_errors(),
-        }
+        };
+
+        metrics.all_hits = metrics.positive_hits + metrics.negative_hits;
+        let request_per_ms = metrics.all_hits as f64 / metrics.load_duration as f64;
+
+        metrics.request_per_sec = match request_per_ms.is_nan() {
+            true => 0f64,
+            _ => request_per_ms * 1000f64,
+        };
+
+        metrics
     }
 }

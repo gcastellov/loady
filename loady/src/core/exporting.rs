@@ -43,6 +43,10 @@ impl Localization {
         num.to_formatted_string(&Locale::en)
     }
 
+    fn format_float(&self, num: &f64) -> String {
+        format!("{:.2}", num)
+    }
+
     fn format_duration(&self, duration: &u128) -> String {
         self.format_number(duration)
     }
@@ -87,9 +91,11 @@ impl StepStatus {
 
 impl Metrics {
     fn as_txt(&self, locale: &Localization) -> String {
-        let mut content = format!("{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n\r\n{: <20}: {:}\r\n{: <20}: {:}\r\n{: <20}: {:}", 
+        let mut content = format!("{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n{: <20}: {:} ms\r\n\r\n{: <20}: {:}\r\n{: <20}: {:}\r\n{: <20}: {:}\r\n{: <20}: {:}", 
             "Test Duration",
             locale.format_duration(&self.test_duration),
+            "Load Duration",
+            locale.format_duration(&self.load_duration),
             "Min Time",
             locale.format_duration(&self.min_time),
             "Mean Time", 
@@ -109,7 +115,9 @@ impl Metrics {
             "Successful hits",
             locale.format_number(&self.positive_hits),
             "Unsuccessul hits",
-            locale.format_number(&self.negative_hits)
+            locale.format_number(&self.negative_hits),
+            "Requests/sec",
+            locale.format_float(&self.request_per_sec),
         );
 
         if !self.errors.is_empty() {
@@ -124,8 +132,9 @@ impl Metrics {
 
     fn as_csv(&self, locale: &Localization) -> String {
         let mut content = format!(
-            "{:};{:};{:};{:};{:};{:};{:};{:};{:};{:};{:}",
+            "{:};{:};{:};{:};{:};{:};{:};{:};{:};{:};{:};{:};{:}",
             locale.format_duration(&self.test_duration),
+            locale.format_duration(&self.load_duration),
             locale.format_duration(&self.min_time),
             locale.format_duration(&self.mean_time),
             locale.format_duration(&self.max_time),
@@ -135,7 +144,8 @@ impl Metrics {
             locale.format_duration(&self.p99_time),
             locale.format_number(&self.all_hits),
             locale.format_number(&self.positive_hits),
-            locale.format_number(&self.negative_hits)
+            locale.format_number(&self.negative_hits),
+            locale.format_float(&self.request_per_sec),
         );
 
         if !self.errors.is_empty() {

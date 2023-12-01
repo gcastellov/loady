@@ -1,5 +1,5 @@
 use std::collections::{BTreeSet, HashMap};
-use tokio::time::Duration;
+use tokio::time::{Duration, Instant};
 use uuid::Uuid;
 
 pub trait TestContext: Default + Clone + Send {
@@ -11,15 +11,18 @@ pub trait TestContext: Default + Clone + Send {
     fn get_session_id(&self) -> String;
     fn get_test_name(&self) -> String;
     fn get_current_duration(&self) -> Duration;
+    fn get_current_load_duration(&self) -> Duration;
     fn get_current_step_name(&self) -> String;
+    fn get_current_stage_name(&self) -> String;
     fn get_current_mean_time(&self) -> u128;
     fn get_current_min_time(&self) -> u128;
     fn get_current_max_time(&self) -> u128;
     fn get_current_percentile_time(&self, percentile: f64) -> u128;
     fn get_current_std_dev(&self) -> u128;
     fn get_current_errors(&self) -> HashMap<i32, u128>;
-    fn set_current_step(&mut self, step_name: &'static str, stage_name: &'static str);
-    fn set_current_duration(&mut self, duration: Duration);
+    fn set_current_step(&mut self, step_name: &'static str);
+    fn set_current_stage(&mut self, stage_name: &'static str);
+    fn set_current_load_duration(&mut self, duration: Duration);
 }
 
 #[derive(Default, Clone, Debug)]
@@ -29,6 +32,7 @@ pub struct TestCaseContext<'a> {
     pub test_suite: &'a str,
     pub test_step_name: Option<&'a str>,
     pub test_stage_name: Option<&'a str>,
+    test_started_at: Option<Instant>,
     test_metrics: TestContextMetrics,
 }
 
@@ -36,7 +40,7 @@ pub struct TestCaseContext<'a> {
 struct TestContextMetrics {
     successful_hits: u128,
     unsuccessful_hits: u128,
-    test_duration: Duration,
+    load_duration: Duration,
     elapsed_times: BTreeSet<u128>,
     errors: HashMap<i32, u128>,
 }
@@ -49,6 +53,7 @@ impl<'a> TestContext for TestCaseContext<'a> {
             test_suite,
             test_step_name: None,
             test_stage_name: None,
+            test_started_at: Some(Instant::now()),
             test_metrics: TestContextMetrics::default(),
         }
     }
@@ -76,13 +81,17 @@ impl<'a> TestContext for TestCaseContext<'a> {
         self.test_name.to_owned()
     }
 
-    fn set_current_step(&mut self, step_name: &'static str, stage_name: &'static str) {
+    fn set_current_step(&mut self, step_name: &'static str) {
         self.test_step_name = Some(step_name);
+        self.test_stage_name = None;
+    }
+
+    fn set_current_stage(&mut self, stage_name: &'static str) {
         self.test_stage_name = Some(stage_name);
     }
 
-    fn set_current_duration(&mut self, duration: Duration) {
-        self.test_metrics.test_duration = duration;
+    fn set_current_load_duration(&mut self, duration: Duration) {
+        self.test_metrics.load_duration = duration;
     }
 
     fn get_successful_hits(&self) -> u128 {
@@ -94,11 +103,22 @@ impl<'a> TestContext for TestCaseContext<'a> {
     }
 
     fn get_current_duration(&self) -> Duration {
-        self.test_metrics.test_duration
+        match self.test_started_at {
+            Some(instant) => instant.elapsed(),
+            _ => Duration::default()
+        }
+    }
+
+    fn get_current_load_duration(&self) -> Duration {
+        self.test_metrics.load_duration
     }
 
     fn get_current_step_name(&self) -> String {
         self.test_step_name.unwrap_or("").to_string()
+    }
+
+    fn get_current_stage_name(&self) -> String {
+        self.test_stage_name.unwrap_or("").to_string()
     }
 
     fn get_current_mean_time(&self) -> u128 {
@@ -169,6 +189,9 @@ impl<'a> TestContext for TestCaseContext<'a> {
 mod tests {
 
     use super::*;
+
+    const STEP_NAME: &str = "STEP NAME";
+    const STAGE_NAME: &str = "STAGE NAME";
 
     fn seed_with_hits(ctx: &mut impl TestContext) {
         let hits = vec![
@@ -288,10 +311,8 @@ mod tests {
 
     #[test]
     fn given_step_name_when_getting_current_step_name_then_returns_expected_value() {
-        const STEP_NAME: &str = "STEP NAME";
-        const STAGE_NAME: &str = "STAGE NAME";
         let mut ctx = TestCaseContext::default();
-        ctx.set_current_step(STEP_NAME, STAGE_NAME);
+        ctx.set_current_step(STEP_NAME);
 
         let actual = ctx.get_current_step_name();
 
@@ -299,12 +320,28 @@ mod tests {
     }
 
     #[test]
-    fn given_test_duration_when_getting_current_duration_then_returns_expected_value() {
+    fn given_step_name_and_stage_name_when_changing_step_then_resets_stage_name() {
+        let mut ctx = TestCaseContext::default();
+        ctx.set_current_step(STEP_NAME);
+        ctx.set_current_stage(STAGE_NAME);
+
+        let mut actual = ctx.get_current_stage_name();
+
+        assert_eq!(actual, STAGE_NAME);
+
+        ctx.set_current_step("OTHER");
+        actual = ctx.get_current_stage_name();
+
+        assert_eq!(actual, "");
+    }
+
+    #[test]
+    fn given_load_duration_when_getting_current_duration_then_returns_expected_value() {
         let duration = Duration::from_secs(2);
         let mut ctx = TestCaseContext::default();
-        ctx.set_current_duration(duration);
+        ctx.set_current_load_duration(duration);
 
-        let actual = ctx.get_current_duration();
+        let actual = ctx.get_current_load_duration();
 
         assert_eq!(actual, duration);
     }

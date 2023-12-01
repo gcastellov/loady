@@ -8,7 +8,7 @@ Technology agnostic load testing tool that helps you define your load tests by u
 #[tokio::main]
 async fn main() {
 
-let ctx = InnerContext {
+    let ctx = InnerContext {
         warmup_url: "http://localhost:8080",
         load_url: "http://localhost:8080/hey",
         client_id: "the client id",
@@ -81,8 +81,10 @@ Once every step finishes, the runner will calculate and report these metrics. In
 | Successful hits count | number |
 | Unsuccessful hits count | number |
 | All hits count | number |
+| Requests / sec | number |
 | Errors count | number |
 | Test duration| ms |
+| Load duration | ms |
 | Min time | ms |
 | Mean time | ms |
 | Max time | ms |
