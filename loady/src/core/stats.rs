@@ -77,14 +77,14 @@ impl Metrics {
             p95_time: test_context.get_current_percentile_time(Self::P95),
             p99_time: test_context.get_current_percentile_time(Self::P99),
             errors: test_context.get_current_errors(),
-        };        
+        };
 
-        let request_per_ms = metrics.all_hits as f64 / metrics.load_duration as f64;
-        
         metrics.all_hits = metrics.positive_hits + metrics.negative_hits;
+        let request_per_ms = metrics.all_hits as f64 / metrics.load_duration as f64;
+
         metrics.request_per_sec = match request_per_ms.is_nan() {
             true => 0f64,
-            _ => request_per_ms * 1000f64
+            _ => request_per_ms * 1000f64,
         };
 
         metrics

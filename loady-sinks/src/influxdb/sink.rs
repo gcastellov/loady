@@ -76,7 +76,7 @@ impl MeticConverter for StepStatus {
                 test_name,
                 "laod_duration",
                 self.metrics.load_duration,
-            ),            
+            ),
             Metric::new(
                 created_at,
                 session_id,
