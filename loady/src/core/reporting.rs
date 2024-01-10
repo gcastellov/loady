@@ -1,5 +1,5 @@
 use crate::core::context::TestContext;
-use crate::core::exporting::{Exporter, FileType};
+use crate::core::exporting::{Exporter, FileType, Localization};
 use crate::core::stats::{StepStatus, TestStatus};
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -29,20 +29,24 @@ pub trait ReportingSink: Sync + Send {
 #[async_trait]
 impl ReportingSink for DefaultReportingSink {
     async fn on_test_ended(&self, test_status: TestStatus) {
-        println!("Test has ended: {:?}", test_status);
+        let locale = Localization::default();
+        print!("\x1B[2J\x1B[1;1H");
+        println!("{}", test_status.as_txt(&locale));
     }
 
     async fn on_load_step_ended(&self, step_status: StepStatus) {
-        println!("Test step has ended: {:?}", step_status);
+        let locale = Localization::default();
+        print!("\x1B[2J\x1B[1;1H");
+        println!("{}", step_status.as_txt(&locale));
     }
 
     async fn on_load_action_ended(&self, step_status: StepStatus) {
-        println!("Test action has ended: {:?}", step_status);
+        let locale = Localization::default();
+        print!("\x1B[2J\x1B[1;1H");
+        println!("{}", step_status.as_txt(&locale));
     }
 
-    async fn on_internal_step_ended(&self, step_name: &str) {
-        println!("Test step has ended: {}", step_name);
-    }
+    async fn on_internal_step_ended(&self, _step_name: &str) {}
 }
 
 impl Default for Reporter {
@@ -161,6 +165,8 @@ impl Reporter {
         if self.use_summary {
             let content =
                 FileType::Txt.get_content(test_status.to_owned(), stats_by_step.to_owned());
+
+            print!("\x1B[2J\x1B[1;1H");
             println!("\r\n{}\r\n", content);
         }
 

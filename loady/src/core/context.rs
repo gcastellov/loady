@@ -105,7 +105,7 @@ impl<'a> TestContext for TestCaseContext<'a> {
     fn get_current_duration(&self) -> Duration {
         match self.test_started_at {
             Some(instant) => instant.elapsed(),
-            _ => Duration::default()
+            _ => Duration::default(),
         }
     }
 

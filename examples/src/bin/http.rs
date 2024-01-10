@@ -97,7 +97,7 @@ async fn main() {
             Duration::from_secs(1),
             2,
         )
-        .with_load_step("load", Box::new(Scenario::load))
+        .with_load_step("first load", Box::new(Scenario::load))
         .with_stage(
             "first wave",
             Duration::from_secs(5),
@@ -115,6 +115,19 @@ async fn main() {
             Duration::from_secs(5),
             Duration::from_secs(1),
             15,
+        )
+        .with_load_step("second load", Box::new(Scenario::load))
+        .with_stage(
+            "first wave",
+            Duration::from_secs(15),
+            Duration::from_secs(1),
+            15,
+        )
+        .with_stage(
+            "second wave",
+            Duration::from_secs(15),
+            Duration::from_secs(2),
+            50,
         )
         .with_clean_up_step(Box::new(Scenario::cleanup))
         .build();
