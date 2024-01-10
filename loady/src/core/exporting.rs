@@ -24,7 +24,7 @@ pub struct Exporter {
 }
 
 #[derive(Default)]
-struct Localization;
+pub struct Localization;
 
 #[derive(Serialize)]
 struct TestReport<'a> {
@@ -53,7 +53,7 @@ impl Localization {
 }
 
 impl TestStatus {
-    fn as_txt(&self, locale: &Localization) -> String {
+    pub fn as_txt(&self, locale: &Localization) -> String {
         format!(
             "{: <20}: {}\r\n{: <20}: {}\r\n\r\n{}",
             "Session ID",
@@ -75,7 +75,7 @@ impl TestStatus {
 }
 
 impl StepStatus {
-    fn as_txt(&self, locale: &Localization) -> String {
+    pub fn as_txt(&self, locale: &Localization) -> String {
         format!(
             "{: <20}: {}\r\n\r\n{}",
             "Test Step",
